@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Evolutionary Search Effort: Triangular Number Formula (Sum of 1..n)</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+</head>
+<body class="bg-transparent text-[var(--foreground)] antialiased p-4">
+  <div class="max-w-6xl mx-auto space-y-6">
+    
+    <!-- Header Hero Card -->
+    <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-6 shadow-md backdrop-blur">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div class="flex items-center gap-2 mb-1">
+            <span class="px-2.5 py-0.5 text-xs font-bold uppercase rounded-md bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">Fishbone Exploration Lineage</span>
+            <span class="text-xs text-[var(--muted-foreground)]">2-Tier Symbolic Verification</span>
+          </div>
+          <h1 class="text-2xl font-bold tracking-tight text-[var(--foreground)]">Triangular Number Formula (Sum of 1..n)</h1>
+          <p class="text-sm text-[var(--muted-foreground)] mt-1">Target Equation: <span class="font-mono text-indigo-300 font-semibold">∑_{k=1}^n k</span></p>
+        </div>
+        
+        
+        <div class="bg-emerald-950/40 border border-emerald-500/40 rounded-xl p-4 text-right">
+          <div class="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Verified Closed Form</div>
+          <div class="text-xl font-bold text-white font-mono mt-0.5">n*(n + 1)/2</div>
+          <div class="text-xs text-emerald-300/80 mt-1">Proven Gen 33 via CAS Induction</div>
+        </div>
+        
+      </div>
+
+      <!-- Quick Metrics Grid -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-6 border-t border-[var(--border)]">
+        <div class="bg-[var(--background)]/60 rounded-xl p-3 border border-[var(--border)]/60">
+          <div class="text-xs text-[var(--muted-foreground)]">Branches Tracked</div>
+          <div class="text-2xl font-bold font-mono text-[var(--foreground)] mt-0.5">8</div>
+        </div>
+        <div class="bg-[var(--background)]/60 rounded-xl p-3 border border-[var(--border)]/60">
+          <div class="text-xs text-emerald-400">Milestone Steps</div>
+          <div class="text-2xl font-bold font-mono text-emerald-400 mt-0.5">4</div>
+        </div>
+        <div class="bg-[var(--background)]/60 rounded-xl p-3 border border-[var(--border)]/60">
+          <div class="text-xs text-rose-400">Falsified Attempts</div>
+          <div class="text-2xl font-bold font-mono text-rose-400 mt-0.5">3</div>
+        </div>
+        <div class="bg-[var(--background)]/60 rounded-xl p-3 border border-[var(--border)]/60">
+          <div class="text-xs text-amber-400">Advisory Interventions</div>
+          <div class="text-2xl font-bold font-mono text-amber-400 mt-0.5">1</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fishbone Diagram Visualizer -->
+    <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-6 shadow-md">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-lg font-semibold text-[var(--foreground)]">Search Tree Fishbone Spine</h2>
+          <p class="text-xs text-[var(--muted-foreground)]">Central spine depicts milestone advances across generations; upper ribs show positive breakthroughs; lower ribs show falsified dead-ends.</p>
+        </div>
+      </div>
+      <div class="w-full overflow-x-auto rounded-xl border border-[var(--border)] bg-slate-950 p-2">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1420 740" width="100%" height="100%" style="font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif;">
+  <defs>
+    <linearGradient id="spineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="60%" stop-color="#818cf8" />
+      <stop offset="100%" stop-color="#22c55e" />
+    </linearGradient>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#090d16" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#000000" flood-opacity="0.6"/>
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#22c55e" />
+    </marker>
+  </defs>
+
+  <!-- Background Canvas -->
+  <rect width="1420" height="740" rx="16" fill="url(#bgGrad)" stroke="#1e293b" stroke-width="2"/>
+
+  <!-- Header Banner -->
+  <text x="45" y="45" font-size="20" font-weight="700" fill="#f8fafc">Evolutionary Search Effort: Triangular Number Formula (Sum of 1..n)</text>
+  <text x="45" y="70" font-size="13" fill="#94a3b8">Target: sum_k=1..n(k)  |  Total Branches: 8  |  Milestones: 4  |  Falsified Attempts: 3</text>
+
+  <!-- Legend -->
+  <g transform="translate(900, 32)">
+    <circle cx="0" cy="10" r="6" fill="#22c55e" />
+    <text x="12" y="14" font-size="11" fill="#cbd5e1">Verified / Milestone</text>
+    <circle cx="160" cy="10" r="6" fill="#ef4444" />
+    <text x="172" y="14" font-size="11" fill="#cbd5e1">Falsified Counterexample</text>
+    <circle cx="340" cy="10" r="6" fill="#f59e0b" />
+    <text x="352" y="14" font-size="11" fill="#cbd5e1">Advisory Guidance</text>
+  </g>
+
+  <!-- Timeline Vertical Reference Grid Lines -->
+  <line x1="130.0" y1="100" x2="130.0" y2="640" stroke="#334155" stroke-width="1" stroke-dasharray="3 3" opacity="0.35"/>
+  <line x1="280.0" y1="100" x2="280.0" y2="640" stroke="#334155" stroke-width="1" stroke-dasharray="3 3" opacity="0.35"/>
+  <line x1="430.0" y1="100" x2="430.0" y2="640" stroke="#334155" stroke-width="1" stroke-dasharray="3 3" opacity="0.35"/>
+  <line x1="580.0" y1="100" x2="580.0" y2="640" stroke="#334155" stroke-width="1" stroke-dasharray="3 3" opacity="0.35"/>
+  <line x1="730.0" y1="100" x2="730.0" y2="640" stroke="#334155" stroke-width="1" stroke-dasharray="3 3" opacity="0.35"/>
+  <line x1="880.0" y1="100" x2="880.0" y2="640" stroke="#334155" stroke-width="1" stroke-dasharray="3 3" opacity="0.35"/>
+  <line x1="1030.0" y1="100" x2="1030.0" y2="640" stroke="#334155" stroke-width="1" stroke-dasharray="3 3" opacity="0.35"/>
+  <line x1="1120.0" y1="100" x2="1120.0" y2="640" stroke="#334155" stroke-width="1" stroke-dasharray="3 3" opacity="0.35"/>
+
+  <!-- Central Spine (Progress Lineage) -->
+  <line x1="130" y1="350" x2="1120" y2="350" stroke="url(#spineGrad)" stroke-width="6" stroke-linecap="round" marker-end="url(#arrow)"/>
+
+  <!-- Dedicated Timeline Axis Scale -->
+  <line x1="130" y1="368" x2="1120" y2="368" stroke="#475569" stroke-width="1.5"/>
+  <line x1="130.0" y1="363" x2="130.0" y2="373" stroke="#64748b" stroke-width="1.5"/>
+  <text x="130.0" y="386" font-size="11" font-family="monospace" font-weight="600" fill="#94a3b8" text-anchor="middle">Gen 0</text>
+  <line x1="280.0" y1="363" x2="280.0" y2="373" stroke="#64748b" stroke-width="1.5"/>
+  <text x="280.0" y="386" font-size="11" font-family="monospace" font-weight="600" fill="#94a3b8" text-anchor="middle">Gen 5</text>
+  <line x1="430.0" y1="363" x2="430.0" y2="373" stroke="#64748b" stroke-width="1.5"/>
+  <text x="430.0" y="386" font-size="11" font-family="monospace" font-weight="600" fill="#94a3b8" text-anchor="middle">Gen 10</text>
+  <line x1="580.0" y1="363" x2="580.0" y2="373" stroke="#64748b" stroke-width="1.5"/>
+  <text x="580.0" y="386" font-size="11" font-family="monospace" font-weight="600" fill="#94a3b8" text-anchor="middle">Gen 15</text>
+  <line x1="730.0" y1="363" x2="730.0" y2="373" stroke="#64748b" stroke-width="1.5"/>
+  <text x="730.0" y="386" font-size="11" font-family="monospace" font-weight="600" fill="#94a3b8" text-anchor="middle">Gen 20</text>
+  <line x1="880.0" y1="363" x2="880.0" y2="373" stroke="#64748b" stroke-width="1.5"/>
+  <text x="880.0" y="386" font-size="11" font-family="monospace" font-weight="600" fill="#94a3b8" text-anchor="middle">Gen 25</text>
+  <line x1="1030.0" y1="363" x2="1030.0" y2="373" stroke="#64748b" stroke-width="1.5"/>
+  <text x="1030.0" y="386" font-size="11" font-family="monospace" font-weight="600" fill="#94a3b8" text-anchor="middle">Gen 30</text>
+  <line x1="1120.0" y1="363" x2="1120.0" y2="373" stroke="#64748b" stroke-width="1.5"/>
+  <text x="1120.0" y="386" font-size="11" font-family="monospace" font-weight="600" fill="#94a3b8" text-anchor="middle">Gen 33</text>
+  <text x="625.0" y="408" font-size="11" font-weight="700" fill="#64748b" text-anchor="middle" letter-spacing="1.5">EVOLUTIONARY SEARCH TIMELINE (GENERATIONS) ────────►</text>
+  <line x1="130.0" y1="350" x2="130.0" y2="298" stroke="#10b981" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="130.0" cy="350" r="6" fill="#10b981" stroke="#ffffff" stroke-width="2"/>
+  <g filter="url(#shadow)">
+    <rect x="53.0" y="240" width="154" height="58" rx="8" fill="#064e3b" stroke="#10b981" stroke-width="1.5" />
+    <text x="63.0" y="258" font-size="10" font-weight="700" fill="#a7f3d0">Gen 0 (Init)</text>
+    <text x="63.0" y="276" font-size="13" font-weight="800" fill="#ffffff">n + 1</text>
+    <text x="63.0" y="290" font-size="10" fill="#6ee7b7">Validity: 0.4500</text>
+  </g>
+  <line x1="460.0" y1="350" x2="460.0" y2="218" stroke="#10b981" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="460.0" cy="350" r="6" fill="#10b981" stroke="#ffffff" stroke-width="2"/>
+  <g filter="url(#shadow)">
+    <rect x="383.0" y="160" width="154" height="58" rx="8" fill="#064e3b" stroke="#10b981" stroke-width="1.5" />
+    <text x="393.0" y="178" font-size="10" font-weight="700" fill="#a7f3d0">Gen 11 (Crossover)</text>
+    <text x="393.0" y="196" font-size="13" font-weight="800" fill="#ffffff">n*(n + 1)</text>
+    <text x="393.0" y="210" font-size="10" fill="#6ee7b7">Validity: 0.7200</text>
+  </g>
+  <line x1="790.0" y1="350" x2="790.0" y2="298" stroke="#10b981" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="790.0" cy="350" r="6" fill="#10b981" stroke="#ffffff" stroke-width="2"/>
+  <g filter="url(#shadow)">
+    <rect x="713.0" y="240" width="154" height="58" rx="8" fill="#064e3b" stroke="#10b981" stroke-width="1.5" />
+    <text x="723.0" y="258" font-size="10" font-weight="700" fill="#a7f3d0">Gen 22 (Constant Perturbation)</text>
+    <text x="723.0" y="276" font-size="13" font-weight="800" fill="#ffffff">n*(n + 1)/3</text>
+    <text x="723.0" y="290" font-size="10" fill="#6ee7b7">Validity: 0.8800</text>
+  </g>
+  <!-- Advisory Flag attached to milestone -->
+  <line x1="790.0" y1="240" x2="790.0" y2="232" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="2 2"/>
+  <g filter="url(#shadow)">
+    <rect x="713.0" y="208" width="154" height="26" rx="6" fill="#78350f" stroke="#f59e0b" stroke-width="1.5"/>
+    <text x="721.0" y="225" font-size="10" font-weight="700" fill="#fef3c7">⚡ GUIDANCE: Advisory: Island stagnat</text>
+  </g>
+  <line x1="130.0" y1="350" x2="130.0" y2="450" stroke="#ef4444" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="130.0" cy="350" r="5" fill="#ef4444" stroke="#ffffff" stroke-width="1.5"/>
+  <g filter="url(#shadow)">
+    <rect x="48.0" y="450" width="164" height="56" rx="8" fill="#7f1d1d" stroke="#ef4444" stroke-width="1.5" />
+    <text x="58.0" y="468" font-size="10" font-weight="700" fill="#fca5a5">❌ Gen 0 Falsified</text>
+    <text x="58.0" y="485" font-size="13" font-weight="800" fill="#ffffff">n²</text>
+    <text x="58.0" y="499" font-size="10" fill="#f87171">Falsified at test domain (</text>
+  </g>
+  <line x1="460.0" y1="350" x2="460.0" y2="535" stroke="#ef4444" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="460.0" cy="350" r="5" fill="#ef4444" stroke="#ffffff" stroke-width="1.5"/>
+  <g filter="url(#shadow)">
+    <rect x="378.0" y="535" width="164" height="56" rx="8" fill="#7f1d1d" stroke="#ef4444" stroke-width="1.5" />
+    <text x="388.0" y="553" font-size="10" font-weight="700" fill="#fca5a5">❌ Gen 11 Falsified</text>
+    <text x="388.0" y="570" font-size="13" font-weight="800" fill="#ffffff">n² + 1</text>
+    <text x="388.0" y="584" font-size="10" fill="#f87171">Falsified at n=2 (residual</text>
+  </g>
+  <line x1="790.0" y1="350" x2="790.0" y2="450" stroke="#ef4444" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="790.0" cy="350" r="5" fill="#ef4444" stroke="#ffffff" stroke-width="1.5"/>
+  <g filter="url(#shadow)">
+    <rect x="708.0" y="450" width="164" height="56" rx="8" fill="#7f1d1d" stroke="#ef4444" stroke-width="1.5" />
+    <text x="718.0" y="468" font-size="10" font-weight="700" fill="#fca5a5">❌ Gen 22 Falsified</text>
+    <text x="718.0" y="485" font-size="13" font-weight="800" fill="#ffffff">n*(n + 2)/2</text>
+    <text x="718.0" y="499" font-size="10" fill="#f87171">Falsified at n=3 (residual</text>
+  </g>
+  <line x1="1120" y1="350" x2="1150" y2="350" stroke="#22c55e" stroke-width="4"/>
+  <circle cx="1120" cy="350" r="12" fill="#22c55e" stroke="#ffffff" stroke-width="3" filter="url(#shadow)"/>
+  <!-- Fish Head / Breakthrough -->
+  <g filter="url(#shadow)">
+    <rect x="1150" y="308.0" width="220" height="84" rx="12" fill="#14532d" stroke="#22c55e" stroke-width="3"/>
+    <text x="1166" y="334.0" font-size="12" font-weight="800" fill="#86efac">🏆 THEOREM PROVEN</text>
+    <text x="1166" y="360.0" font-size="17" font-weight="800" fill="#ffffff">n*(n + 1)/2</text>
+    <text x="1166" y="380.0" font-size="10" fill="#bbf7d0">Gen 33 | Formally proven via mathemat</text>
+  </g>
+</svg>
+      </div>
+    </div>
+
+    <!-- Search Effort History Log Table -->
+    <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-6 shadow-md">
+      <h2 class="text-lg font-semibold text-[var(--foreground)] mb-3">Chronological Exploration Log</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="border-b border-[var(--border)] text-xs text-[var(--muted-foreground)] font-semibold uppercase tracking-wider">
+              <th class="py-2 px-3">Gen</th>
+              <th class="py-2 px-3">Status</th>
+              <th class="py-2 px-3">Hypothesis / Candidate</th>
+              <th class="py-2 px-3">Validity</th>
+              <th class="py-2 px-3">Operator</th>
+              <th class="py-2 px-3">Outcome / Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            
+        <tr class="border-b border-[var(--border)] hover:bg-[var(--card)]/80 transition-colors">
+          <td class="py-2.5 px-3 font-mono text-xs">0</td>
+          <td class="py-2.5 px-3"><span class="px-2 py-0.5 text-xs font-semibold rounded-full border bg-emerald-500/20 text-emerald-400 border-emerald-500/30">MILESTONE</span></td>
+          <td class="py-2.5 px-3 font-mono font-medium text-sm text-[var(--foreground)]">n + 1</td>
+          <td class="py-2.5 px-3 font-mono text-xs">0.4500</td>
+          <td class="py-2.5 px-3 text-xs text-[var(--muted-foreground)] capitalize">init</td>
+          <td class="py-2.5 px-3 text-xs text-[var(--muted-foreground)]">Initial random population seed</td>
+        </tr>
+        
+        <tr class="border-b border-[var(--border)] hover:bg-[var(--card)]/80 transition-colors">
+          <td class="py-2.5 px-3 font-mono text-xs">0</td>
+          <td class="py-2.5 px-3"><span class="px-2 py-0.5 text-xs font-semibold rounded-full border bg-rose-500/20 text-rose-400 border-rose-500/30">FALSIFIED</span></td>
+          <td class="py-2.5 px-3 font-mono font-medium text-sm text-[var(--foreground)]">n²</td>
+          <td class="py-2.5 px-3 font-mono text-xs">0.2000</td>
+          <td class="py-2.5 px-3 text-xs text-[var(--muted-foreground)] capitalize">init</td>
+          <td class="py-2.5 px-3 text-xs text-[var(--muted-foreground)]">Falsified at test domain (residual 8.50)</td>
+        </tr>
+        
+        <tr class="border-b border-[var(--border)] hover:bg-[var(--card)]/80 transition-colors">
+          <td class="py-2.5 px-3 font-mono text-xs">11</td>
+          <td class="py-2.5 px-3"><span class="px-2 py-0.5 text-xs font-semibold rounded-full border bg-emerald-500/20 text-emerald-400 border-emerald-500/30">MILESTONE</span></td>
+          <td class="py-2.5 px-3 font-mono font-medium text-sm text-[var(--foreground)]">n*(n + 1)</td>
+          <td class="py-2.5 px-3 font-mono text-xs">0.7200</td>
+          <td class="py-2.5 px-3 text-xs text-[var(--muted-foreground)] capitalize">crossover</td>
+          <td class="py-2.5 px-3 text-xs text-[var(--muted-foreground)]">Subtree crossover matched leading growth rate</td>
+        </tr>
+        
+        <tr class="border-b border-[var(--border)] hover:bg-[var(--card)]/80 transition-colors">
+          <td class="py-2.5 px-3 font-mono text-xs">11</td>
+          <td class="py-2.5 px-3"><span class="px-2 py-0.5 text-xs font-semibold rounded-full border bg-rose-500/20 text-rose-400 border-rose-500/30">FALSIFIED</span></td>
+          <td class="py-2.5 px-3 font-mono font-medium text-sm text-[var(--foreground)]">n² + 1</td>
+          <td class="py-2.5 px-3 font-mono text-xs">0.3500</td>
+          <td class="py-2.5 px-3 text-xs text-[var(--muted-foreground)] capitalize">subtree mutation</td>
+          <td class="py-2.5 px-3 text-xs text-[var(--muted-foreground)]">Falsified at n=2 (residual 3.00)</td>
+        </tr>
+        
+        <tr class="border-b border-[var(--border)] hover:bg-[var(--card)]/80 transition-colors">
+          <td class="py-2.5 px-3 font-mono text-xs">22</td>
+          <td class="py-2.5 px-3"><span class="px-2 py-0.5 text-xs font-semibold rounded-full border bg-amber-500/20 text-amber-400 border-amber-500/30">INTERVENTION</span></td>
+          <td class="py-2.5 px-3 font-mono font-medium text-sm text-[var(--foreground)]">—</td>
+          <td class="py-2.5 px-3 font-mono text-xs">0.7200</td>
+          <td class="py-2.5 px-3 text-xs text-[var(--muted-foreground)] capitalize">advisory</td>
+          <td class="py-2.5 px-3 text-xs text-[var(--muted-foreground)]">Advisory: Island stagnation detected, boosted constant perturbation</td>
+        </tr>
+        
+        <tr class="border-b border-[var(--border)] hover:bg-[var(--card)]/80 transition-colors">
+          <td class="py-2.5 px-3 font-mono text-xs">22</td>
+          <td class="py-2.5 px-3"><span class="px-2 py-0.5 text-xs font-semibold rounded-full border bg-emerald-500/20 text-emerald-400 border-emerald-500/30">MILESTONE</span></td>
+          <td class="py-2.5 px-3 font-mono font-medium text-sm text-[var(--foreground)]">n*(n + 1)/3</td>
+          <td class="py-2.5 px-3 font-mono text-xs">0.8800</td>
+          <td class="py-2.5 px-3 text-xs text-[var(--muted-foreground)] capitalize">constant perturbation</td>
+          <td class="py-2.5 px-3 text-xs text-[var(--muted-foreground)]">Constant tuning narrowed residual error</td>
+        </tr>
+        
+        <tr class="border-b border-[var(--border)] hover:bg-[var(--card)]/80 transition-colors">
+          <td class="py-2.5 px-3 font-mono text-xs">22</td>
+          <td class="py-2.5 px-3"><span class="px-2 py-0.5 text-xs font-semibold rounded-full border bg-rose-500/20 text-rose-400 border-rose-500/30">FALSIFIED</span></td>
+          <td class="py-2.5 px-3 font-mono font-medium text-sm text-[var(--foreground)]">n*(n + 2)/2</td>
+          <td class="py-2.5 px-3 font-mono text-xs">0.8200</td>
+          <td class="py-2.5 px-3 text-xs text-[var(--muted-foreground)] capitalize">subtree mutation</td>
+          <td class="py-2.5 px-3 text-xs text-[var(--muted-foreground)]">Falsified at n=3 (residual 1.50)</td>
+        </tr>
+        
+        <tr class="border-b border-[var(--border)] hover:bg-[var(--card)]/80 transition-colors">
+          <td class="py-2.5 px-3 font-mono text-xs">33</td>
+          <td class="py-2.5 px-3"><span class="px-2 py-0.5 text-xs font-semibold rounded-full border bg-emerald-500/20 text-emerald-400 border-emerald-500/30">BREAKTHROUGH</span></td>
+          <td class="py-2.5 px-3 font-mono font-medium text-sm text-[var(--foreground)]">n*(n + 1)/2</td>
+          <td class="py-2.5 px-3 font-mono text-xs">1.0000</td>
+          <td class="py-2.5 px-3 text-xs text-[var(--muted-foreground)] capitalize">constant perturbation</td>
+          <td class="py-2.5 px-3 text-xs text-[var(--muted-foreground)]">Formally proven via mathematical_induction (Tier 2 CAS certified)</td>
+        </tr>
+        
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>
