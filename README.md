@@ -40,9 +40,16 @@ Comprehensive documentation is available in the [`docs/`](docs/) directory:
 8. **Hybrid Discrete Calculus Solver:**
    - Incorporates an exact finite-difference solver to compute forward differences $\Delta^d Y$.
    - If differences vanish at order $d+1$, the closed form is derived via exact rational interpolation and factored, bypassing the combinatorial bottleneck for polynomial summations (e.g. $\sum k^2 = \frac{n(n+1)(2n+1)}{6}$ solved in $< 0.2$s).
-9. **Advisory Subtree / Seed Injection:**
+9. **Research Frontier & Cumulative Effort Tracking:**
+   - In mathematics, documenting what has *not yet been discovered* and recording the computational effort invested is just as important as recording successes.
+   - Persistent `target_registry` tracks attempts, generations, evaluations, CPU seconds, near-miss hypotheses, and failure barriers across all problem spaces, exportable via `FRONTIER.md`.
+10. **Graceful Interrupts & Working Population Auto-Resume:**
+   - Captures `Ctrl+C` / interrupt signals without crashing.
+   - Serializes in-flight multi-island populations, ASTs, and fitness vectors to SQLite checkpoints.
+   - Re-running the command seamlessly resumes where it left off, while `--fresh` allows starting from scratch.
+11. **Advisory Subtree / Seed Injection:**
    - Strategic LLM recommendations can return `suggested_subtrees` (e.g. `(2*n + 1)`), which are canonicalized and seeded directly into exploratory islands.
-10. **Zero-Intron Bloat Control:**
+12. **Zero-Intron Bloat Control:**
    - All offspring generated via crossover or mutation pass through algebraic identity canonicalization ($x+0 \to x, x \cdot 1 \to x, x-x \to 0, c_1 \odot c_2 \to c_3$), keeping expression depths compact.
 
 ---
@@ -84,7 +91,7 @@ evolutionary_math/
 │   ├── benchmark_guided_sum_k2.py  # Phase 2: Higher-order target benchmark with dynamic intervention
 │   ├── run_discovery.py            # Phase 1: Autonomous unguided discovery loop
 │   └── verify_identities.py        # Phase 0: Verification harness across classical identities
-└── tests/                          # 61 comprehensive unit & integration tests
+└── tests/                          # 86 comprehensive unit & integration tests
 ```
 
 ---
@@ -132,7 +139,7 @@ python src/evolutionary_math/cli.py discover --mode trigonometry --target "sin(x
 python src/evolutionary_math/cli.py discover --mode geometry --target "2 * (a + b)"
 ```
 
-### 3. Run All Tests (78 Tests)
+### 3. Run All Tests (86 Tests)
 ```powershell
 python -m pytest tests/ -v
 ```
@@ -147,7 +154,34 @@ To consolidate existing databases and purge repetitive concrete iterations:
 python src/evolutionary_math/cli.py consolidate --db autonomous_discoveries.db
 ```
 
-### 4. Run Autonomous Continuous Discovery Campaign
+### 5. Active Mathematical Research Frontier (`frontier`)
+Document problem spaces that the engine has explored but **not yet formally proven**, capturing the cumulative computational effort (attempts, generations, individual candidate evaluations, CPU runtime), highest validity score reached, nearest-miss algebraic hypothesis, and specific falsification/failure barriers:
+```powershell
+# Inspect the top open targets and cumulative effort
+python src/evolutionary_math/cli.py frontier --db autonomous_discoveries.db --limit 10
+
+# Filter frontier by domain mode
+python src/evolutionary_math/cli.py frontier --mode trigonometry
+
+# Export publication-ready dossier to FRONTIER.md
+python src/evolutionary_math/cli.py frontier --db autonomous_discoveries.db --export-md FRONTIER.md
+```
+
+### 6. Graceful Interrupts & Working Population Auto-Resume (`--fresh`)
+Pressing `Ctrl+C` during an evolutionary search captures the interrupt signal, finishes the current evaluation, serializes the active population across all islands (including all candidate formulas, ASTs, fitness vectors, and generations), and saves it to a persistent SQLite checkpoint.
+Re-running the command seamlessly resumes from where it was interrupted:
+```powershell
+# 1. Start targeted search (press Ctrl+C after a few generations)
+python src/evolutionary_math/cli.py discover --target "sum_k=1..n(k^5)" --generations 25
+
+# 2. Re-run: seamlessly resumes from Generation X without restarting!
+python src/evolutionary_math/cli.py discover --target "sum_k=1..n(k^5)" --generations 50
+
+# 3. Pass --fresh if you want to discard checkpoints and start from scratch
+python src/evolutionary_math/cli.py discover --target "sum_k=1..n(k^5)" --fresh
+```
+
+### 7. Run Autonomous Continuous Discovery Campaign
 ```powershell
 # Continuous campaign in algebra domain
 python src/evolutionary_math/cli.py campaign --mode algebra --continuous --db research.db
@@ -159,12 +193,12 @@ python src/evolutionary_math/cli.py campaign --mode trigonometry --continuous --
 python src/evolutionary_math/cli.py campaign --continuous --llm-url http://localhost:1234/v1 --llm-model qwen/qwen3.5-9b
 ```
 
-### 3. List Stored Discoveries & Plain-English Intuition
+### 8. List Stored Discoveries & Plain-English Intuition
 ```powershell
 python src/evolutionary_math/cli.py list --db research.db
 ```
 
-### 4. Visualize the Cumulative Lemma Graph
+### 9. Visualize the Cumulative Lemma Graph
 ```powershell
 python src/evolutionary_math/cli.py graph --db research.db
 ```

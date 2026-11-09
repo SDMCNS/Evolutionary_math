@@ -24,7 +24,7 @@ $$\text{Deterministic Computation performs the Search & Proofs} \iff \text{Air-G
 - **[Library Developer Guide](library_guide.md):** Complete tutorial and API reference for integrating `evolutionary_math` into your Python applications.
 - **[Methodology & Mathematical Foundations](methodology.md):** Deep-dive into Context-Free Grammars, hash-consed DAGs, algebraic canonicalization, and symbolic mathematical induction.
 - **[Abilities, Benchmarks & Theoretical Limitations](abilities_and_limits.md):** Honest analysis of what the engine excels at, empirical performance benchmarks, and fundamental mathematical limitations (Richardson's theorem, undecidability, search space explosion).
-- **[Command-Line Interface (CLI) Reference](cli_reference.md):** Complete guide to the CLI subcommands (`discover`, `campaign`, `list`, `graph`, `latex`).
+- **[Command-Line Interface (CLI) Reference](cli_reference.md):** Complete guide to the CLI subcommands (`discover`, `campaign`, `list`, `frontier`, `fishbone`, `history`, `targets`, `consolidate`, `export`, `graph`, `latex`).
 
 ---
 

@@ -156,3 +156,4 @@ def test_graceful_interrupt_handling():
     assert res2.total_generations == 6
     
     kb.close()
+

@@ -169,7 +169,10 @@ The LLM is strictly decoupled from proof evaluation and candidate synthesis:
 
 ## 7. Persistent Knowledge Base & Audit Lineage (`storage/`, `utils/`)
 
-- Backed by SQLite (`theorems` table).
-- Stores the theorem ID, canonical S-expression, human-readable formula, proof method, generation, discovery timestamp, full serialized AST dictionary (`ast_json`), and explicit dependency graph (`dependencies_json`).
-- Automatically promotes verified theorems into grammar building blocks across sessions.
+Backed by SQLite across four relational tables and analytical views:
+- **`theorems` table:** Stores the theorem ID, canonical S-expression, human-readable formula, proof method, generation, discovery timestamp, full serialized AST dictionary (`ast_json`), and explicit dependency graph (`dependencies_json`). Automatically promotes verified theorems into grammar building blocks across sessions.
+- **`search_history` table:** Chronological exploration audit trail tracking milestones, falsified counterexamples, heuristic interventions, and branch lineages.
+- **`target_registry` table:** Persistent research frontier tracking every attempted mathematical target space, recording lifecycle status (`SOLVED` vs `UNSOLVED`), cumulative attempts, generations, evaluations, CPU runtime, best validity score, nearest candidate closed-form, and failure diagnostics.
+- **`checkpoints` table:** In-flight working population checkpoints that serialize multi-island populations, AST nodes, and fitness vectors to enable seamless auto-resume and graceful exit on interrupt (`Ctrl+C`).
+- **`v_discoveries` & `v_unsolved_targets` views:** Clean, human-readable SQL views formatted with LaTeX and textbook mathematics for reporting and dashboard integration.
 
