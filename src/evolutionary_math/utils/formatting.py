@@ -1,7 +1,7 @@
 """LaTeX formatting, human-readable algebra, ASCII tree visualization, and Markdown/Mermaid exports."""
 
 import re
-from typing import List, Optional, Union, TYPE_CHECKING
+from typing import List, Optional, Union, Dict, Any, TYPE_CHECKING
 import sympy as sp
 
 from evolutionary_math.core.ast import ExprNode, ConstantNode, VariableNode, OperatorNode, LemmaNode, SequenceTermNode
@@ -508,5 +508,156 @@ def export_knowledge_base_markdown(kb: "KnowledgeBase", title: str = "Mathematic
             pass
 
     return "\n".join(lines)
+
+
+def export_frontier_markdown(
+    kb: "KnowledgeBase",
+    agenda: Optional[Any] = None,
+    title: str = "Active Mathematical Research Frontier & Exploration Effort",
+    domain_mode: Optional[str] = None,
+    limit: int = 50,
+) -> str:
+    """Export the active research frontier: unsolved targets, effort expended, near-misses, and failure modes."""
+    # Ensure registry is synchronized with any historical search data
+    try:
+        kb.sync_target_registry_from_history()
+    except Exception:
+        pass
+
+    all_records = kb.get_all_target_records(domain_mode=domain_mode, limit=1000)
+    unsolved = [r for r in all_records if r.status == "UNSOLVED"]
+    solved = [r for r in all_records if r.status == "SOLVED"]
+
+    total_evals = sum(r.total_evaluations for r in all_records)
+    total_gens = sum(r.total_generations for r in all_records)
+    total_time = sum(r.total_time_sec for r in all_records)
+    total_attempts = sum(r.attempts_count for r in all_records)
+    max_unsolved_val = max((r.best_validity for r in unsolved), default=0.0)
+
+    time_str = f"{total_time:.1f}s" if total_time < 60 else f"{total_time / 60:.1f}m"
+
+    lines = [
+        f"# {title}",
+        "",
+        "> This document records open mathematical target spaces explored by the evolutionary engine that have **not yet been formally proven**, alongside the cumulative computational effort, best near-miss hypotheses, and falsification barriers encountered.",
+        "",
+        "## 📊 Frontier Effort Overview",
+        "",
+        f"- **Open / Unsolved Problems:** {len(unsolved)}",
+        f"- **Formally Proven Discoveries:** {len(solved)}",
+        f"- **Cumulative Evolutionary Attempts:** {total_attempts}",
+        f"- **Total Expressions Evaluated:** {total_evals:,}",
+        f"- **Total Search Generations:** {total_gens:,}",
+        f"- **Dedicated Search Runtime:** {time_str}",
+        f"- **Highest Near-Miss Validity on Frontier:** {max_unsolved_val * 100:.2f}%",
+        "",
+        "---",
+        "",
+        "## 🔬 Top Open Mathematical Targets",
+        "",
+        "| Rank | Target Problem | Domain | Best Validity | Nearest Candidate Formula | Attempts | Evals | Primary Failure Barrier |",
+        "|:---:|:---|:---:|:---:|:---|:---:|:---:|:---|",
+    ]
+
+    top_unsolved = unsolved[:limit]
+    for i, r in enumerate(top_unsolved, start=1):
+        target = r.clean_target or format_clean_target(r.target_str)
+        formula = r.best_clean_formula or (format_clean_formula(r.best_candidate_str) if r.best_candidate_str else "—")
+        val_str = f"**{r.best_validity * 100:.2f}%**" if r.best_validity > 0 else "0.00%"
+        reason_short = (r.failure_reason or "Search depth exhausted")[:40]
+        if len(r.failure_reason or "") > 40:
+            reason_short += "…"
+        lines.append(
+            f"| {i} | `${target}$` | `{r.domain_mode}` | {val_str} | `${formula}$` | {r.attempts_count} | {r.total_evaluations} | {reason_short} |"
+        )
+
+    lines.extend([
+        "",
+        "---",
+        "",
+        "## 📁 Detailed Problem Dossiers & Failure Analysis",
+        "",
+    ])
+
+    for i, r in enumerate(top_unsolved, start=1):
+        name = infer_theorem_name(r.target_str)
+        target = r.clean_target or format_clean_target(r.target_str)
+        formula = r.best_clean_formula or (format_clean_formula(r.best_candidate_str) if r.best_candidate_str else "—")
+        val_pct = r.best_validity * 100.0
+        reason = r.failure_reason or "Exceeded max generations without finding a formally verified inductive closed-form."
+
+        lines.extend([
+            f"### {i}. {name}",
+            "",
+            f"- **Target Expression:** `${target}$`",
+            f"- **Domain Mode:** `{r.domain_mode}`",
+            f"- **Best Validity Score:** `{r.best_validity:.4f}` ({val_pct:.2f}% numerical conformance)",
+            f"- **Closest Candidate Formula:** `${formula}$`",
+            f"- **Cumulative Effort:** {r.attempts_count} attempt(s) | {r.total_generations} generations | {r.total_evaluations} evals | {r.total_time_sec:.2f}s CPU",
+        ])
+
+        if r.advisory_interventions_count > 0:
+            lines.append(f"- **Heuristic Advisory Interventions:** {r.advisory_interventions_count}")
+
+        lines.extend([
+            "",
+            "> [!WARNING]",
+            f"> **Falsification Diagnosis / Verification Barrier:**  ",
+            f"> {reason}",
+            "",
+        ])
+
+    # Unattempted Curriculum Targets (from Agenda, if provided)
+    if agenda is not None:
+        try:
+            attempted_targets = {r.target_str for r in all_records}
+            curriculum = agenda.get_curriculum_targets() if hasattr(agenda, "get_curriculum_targets") else []
+            unattempted = [t for t in curriculum if str(t) not in attempted_targets]
+
+            if unattempted:
+                lines.extend([
+                    "---",
+                    "",
+                    "## 🔭 Unattempted Curriculum Targets (Next on Horizon)",
+                    "",
+                    "| Index | Target Problem | Mathematical Concept |",
+                    "|:---:|:---|:---|",
+                ])
+                for idx, t in enumerate(unattempted[:25], start=1):
+                    t_str = format_clean_target(t)
+                    name = infer_theorem_name(t)
+                    lines.append(f"| {idx} | `${t_str}$` | {name} |")
+                lines.append("")
+        except Exception:
+            pass
+
+    # Fishbone Search Tree for the Highest Near-Miss Open Target
+    if top_unsolved:
+        try:
+            from evolutionary_math.utils.fishbone import generate_fishbone_mermaid
+            sample = top_unsolved[0]
+            branches = kb.get_search_history(target_str=sample.target_str)
+            if branches:
+                name = infer_theorem_name(sample.target_str)
+                target_clean = sample.clean_target or format_clean_target(sample.target_str)
+                lines.extend([
+                    "---",
+                    "",
+                    f"## 🧬 Search Effort Lineage for Top Near-Miss Target ({name})",
+                    "",
+                    f"> **Problem:** `${target_clean}$`  ",
+                    f"> **Max Validity Achieved:** `{sample.best_validity:.4f}` ({sample.best_validity * 100:.2f}%)  ",
+                    "> The diagram visualizes the evolutionary path: upper ribs mark milestones, lower ribs mark falsified counterexamples.",
+                    "",
+                    "```mermaid",
+                    generate_fishbone_mermaid(branches, title=f"Frontier Effort: {name}"),
+                    "```",
+                    "",
+                ])
+        except Exception:
+            pass
+
+    return "\n".join(lines)
+
 
 

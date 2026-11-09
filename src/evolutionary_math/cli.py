@@ -26,6 +26,7 @@ from evolutionary_math.utils.formatting import (
     format_clean_formula,
     format_expanded_formula,
     format_complete_latex,
+    export_frontier_markdown,
 )
 from evolutionary_math.utils.lean_exporter import generate_lean4_proof_file
 from evolutionary_math.dashboard import DiscoveryDashboard
@@ -665,6 +666,77 @@ def cmd_history(args):
     kb.close()
 
 
+def cmd_frontier(args):
+    """Inspect the active research frontier: open targets, effort expended, near-misses, and failure modes."""
+    kb = KnowledgeBase(args.db)
+    # Sync target registry from search history to ensure latest effort data
+    kb.sync_target_registry_from_history()
+
+    agenda = ProblemSpaceAgenda(mode=args.mode if args.mode != "all" else "algebra") if args.agenda else None
+
+    if args.export_md:
+        output = export_frontier_markdown(
+            kb=kb,
+            agenda=agenda,
+            title=args.title or "Active Mathematical Research Frontier & Exploration Effort",
+            domain_mode=args.mode if args.mode != "all" else None,
+            limit=args.limit,
+        )
+        with open(args.export_md, "w", encoding="utf-8") as f:
+            f.write(output)
+        print(f"✅ Frontier exploration report exported to '{args.export_md}'")
+        kb.close()
+        return
+
+    # Terminal report
+    all_records = kb.get_all_target_records(domain_mode=args.mode if args.mode != "all" else None, limit=1000)
+    unsolved = [r for r in all_records if r.status == "UNSOLVED"]
+    solved = [r for r in all_records if r.status == "SOLVED"]
+
+    print("=" * 80)
+    print(f"🔬 MATHEMATICAL RESEARCH FRONTIER ({args.db})")
+    print(f"Open / Unsolved Targets: {len(unsolved)} | Solved Theorems: {len(solved)}")
+    total_evals = sum(r.total_evaluations for r in all_records)
+    total_attempts = sum(r.attempts_count for r in all_records)
+    total_time = sum(r.total_time_sec for r in all_records)
+    print(f"Effort: {total_attempts} attempts across {len(all_records)} problem spaces | {total_evals:,} evals | {total_time:.1f}s CPU")
+    print("=" * 80)
+
+    if not unsolved:
+        print("No unsolved targets recorded in the active frontier.")
+    else:
+        for i, r in enumerate(unsolved[:args.limit], start=1):
+            name = infer_theorem_name(r.target_str)
+            target = r.clean_target or format_clean_target(r.target_str)
+            formula = r.best_clean_formula or (format_clean_formula(r.best_candidate_str) if r.best_candidate_str else "—")
+            val_pct = r.best_validity * 100.0
+            reason = (r.failure_reason or "Search depth exhausted")[:60]
+
+            print(f"\n{i}. [UNSOLVED] {name} ({r.domain_mode})")
+            print(f"   Target:       {target}")
+            print(f"   Best Val:     {r.best_validity:.4f} ({val_pct:.2f}%)")
+            print(f"   Near-Miss:    {formula}")
+            print(f"   Effort:       {r.attempts_count} attempt(s) | {r.total_generations} gens | {r.total_evaluations} evals | {r.total_time_sec:.2f}s")
+            print(f"   Barrier:      {reason}")
+            print("-" * 80)
+
+    if args.unattempted and agenda:
+        attempted_targets = {r.target_str for r in all_records}
+        curriculum = agenda.get_curriculum_targets()
+        unattempted = [t for t in curriculum if str(t) not in attempted_targets]
+        if unattempted:
+            print("\n" + "=" * 80)
+            print(f"🔭 UNATTEMPTED CURRICULUM HORIZON ({len(unattempted)} queue targets)")
+            print("=" * 80)
+            for i, target in enumerate(unattempted[:15], start=1):
+                t_str = format_clean_target(target)
+                name = infer_theorem_name(target)
+                print(f"{i:2d}. {t_str:32s} | {name}")
+            print("=" * 80)
+
+    kb.close()
+
+
 def main():
     parser = argparse.ArgumentParser(description="Evolutionary Mathematical Discovery Engine CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -753,6 +825,17 @@ def main():
     p_cons = subparsers.add_parser("consolidate", help="Consolidate repetitive numerical iterations into unified generalized meta-theorems")
     p_cons.add_argument("--db", default="autonomous_discoveries.db", help="SQLite database path")
     p_cons.set_defaults(func=cmd_consolidate)
+
+    # 'frontier' sub-command (inspect open targets, cumulative effort, near-misses, and failure modes)
+    p_frontier = subparsers.add_parser("frontier", help="Inspect active research frontier: unsolved targets, effort expended, and near-misses")
+    p_frontier.add_argument("--db", default="autonomous_discoveries.db", help="SQLite database path")
+    p_frontier.add_argument("--mode", choices=["algebra", "trigonometry", "geometry", "calculus", "all"], default="all", help="Filter frontier by domain mode")
+    p_frontier.add_argument("--limit", type=int, default=25, help="Maximum number of open targets to display")
+    p_frontier.add_argument("--export-md", type=str, default=None, help="Export comprehensive publication-ready Markdown report to file (e.g. FRONTIER.md)")
+    p_frontier.add_argument("--title", type=str, default="Active Mathematical Research Frontier & Exploration Effort", help="Report document title")
+    p_frontier.add_argument("--agenda", action="store_true", default=True, help="Cross-reference with problem space agenda")
+    p_frontier.add_argument("--unattempted", action="store_true", default=False, help="Display unattempted curriculum targets waiting on horizon")
+    p_frontier.set_defaults(func=cmd_frontier)
 
     args = parser.parse_args()
     args.func(args)

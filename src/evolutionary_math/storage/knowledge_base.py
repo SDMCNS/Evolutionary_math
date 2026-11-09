@@ -57,6 +57,27 @@ class SearchBranchRecord:
     timestamp: float = 0.0
 
 
+@dataclass
+class TargetEffortRecord:
+    """Persistent record of an attempted mathematical target space and exploration effort."""
+    target_str: str
+    clean_target: str
+    domain_mode: str
+    status: str                         # "SOLVED", "UNSOLVED"
+    attempts_count: int
+    total_generations: int
+    total_evaluations: int
+    total_time_sec: float
+    best_validity: float
+    best_candidate_str: Optional[str] = None
+    best_clean_formula: Optional[str] = None
+    failure_reason: Optional[str] = None
+    advisory_interventions_count: int = 0
+    first_attempted: float = 0.0
+    last_attempted: float = 0.0
+    last_experiment_id: Optional[str] = None
+
+
 class KnowledgeBase:
     """SQLite-backed persistent store for mathematical discoveries, proofs, and lineages."""
 
@@ -149,8 +170,51 @@ class KnowledgeBase:
                 CREATE INDEX IF NOT EXISTS idx_history_target ON search_history(target_str, generation)
             """)
 
+            # Target registry table (tracking lifecycle, status, and cumulative effort for all attempted problem spaces)
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS target_registry (
+                    target_str TEXT PRIMARY KEY,
+                    clean_target TEXT NOT NULL,
+                    domain_mode TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    attempts_count INTEGER NOT NULL DEFAULT 1,
+                    total_generations INTEGER NOT NULL DEFAULT 0,
+                    total_evaluations INTEGER NOT NULL DEFAULT 0,
+                    total_time_sec REAL NOT NULL DEFAULT 0.0,
+                    best_validity REAL NOT NULL DEFAULT 0.0,
+                    best_candidate_str TEXT,
+                    best_clean_formula TEXT,
+                    failure_reason TEXT,
+                    advisory_interventions_count INTEGER NOT NULL DEFAULT 0,
+                    first_attempted REAL NOT NULL,
+                    last_attempted REAL NOT NULL,
+                    last_experiment_id TEXT
+                )
+            """)
+            self.conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_target_status ON target_registry(status)
+            """)
+            self.conn.execute("""
+                CREATE VIEW IF NOT EXISTS v_unsolved_targets AS
+                SELECT 
+                    clean_target,
+                    domain_mode,
+                    attempts_count,
+                    total_generations,
+                    total_evaluations,
+                    ROUND(total_time_sec, 2) AS total_time_sec,
+                    ROUND(best_validity, 4) AS best_validity,
+                    best_clean_formula,
+                    failure_reason,
+                    datetime(last_attempted, 'unixepoch') AS last_attempted_at
+                FROM target_registry
+                WHERE status = 'UNSOLVED'
+                ORDER BY best_validity DESC, total_evaluations DESC
+            """)
+
         # Auto-enrich legacy records with intuitive representations
         self.enrich_all_theorems()
+        self.sync_target_registry_from_history()
 
     def record_branch(self, branch: SearchBranchRecord) -> None:
         """Record an exploration attempt or milestone into persistent search history."""
@@ -258,6 +322,311 @@ class KnowledgeBase:
         cursor = self.conn.cursor()
         cursor.execute("SELECT DISTINCT target_str FROM search_history ORDER BY target_str")
         return [r[0] for r in cursor.fetchall()]
+
+    def record_target_attempt(
+        self,
+        target: Any,
+        result: Any,
+        domain_mode: str = "algebra",
+        experiment_id: str = "default",
+    ) -> TargetEffortRecord:
+        """Record or update cumulative exploration effort for an attempted mathematical target space."""
+        from evolutionary_math.utils.formatting import format_clean_target, format_clean_formula
+
+        t_str = str(target)
+        c_target = format_clean_target(target)
+        now = time.time()
+
+        is_solved = getattr(result, "success", False) or self.is_target_solved(target)
+        status = "SOLVED" if is_solved else "UNSOLVED"
+
+        if hasattr(result, "best_candidate_str") and not hasattr(result, "telemetry_history"):
+            # Direct DiscoveryTelemetry object
+            generations = getattr(result, "generation", 0)
+            time_sec = getattr(result, "elapsed_time_sec", 0.0)
+            advisory_count = 1 if getattr(result, "advisory_intervention", None) else 0
+            evaluations = getattr(result, "total_individuals_evaluated", generations * 160)
+            best_val = getattr(result, "best_validity", 0.0)
+            best_cand = getattr(result, "best_candidate_str", None)
+        else:
+            # EngineRunResult object
+            generations = getattr(result, "total_generations", 0)
+            time_sec = getattr(result, "total_time_sec", 0.0)
+            advisory_count = getattr(result, "advisory_interventions_count", 0)
+
+            telemetry = getattr(result, "telemetry_history", [])
+            if telemetry:
+                evaluations = sum(t.total_individuals_evaluated for t in telemetry)
+                best_telem = max(telemetry, key=lambda t: t.best_validity)
+                best_val = best_telem.best_validity
+                best_cand = best_telem.best_candidate_str
+            else:
+                evaluations = generations * 40 * 3
+                best_val = 1.0 if is_solved else 0.0
+                th = getattr(result, "discovered_theorem", None)
+                best_cand = th.discovery_str if th else None
+
+        best_clean = format_clean_formula(best_cand) if best_cand else None
+        fail_reason = "Formally verified" if is_solved else f"Reached generation limit ({generations}) without formal proof"
+
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM target_registry WHERE target_str = ?", (t_str,))
+        existing = cursor.fetchone()
+
+        if existing:
+            new_attempts = existing["attempts_count"] + 1
+            new_gens = existing["total_generations"] + generations
+            new_evals = existing["total_evaluations"] + evaluations
+            new_time = existing["total_time_sec"] + time_sec
+            new_advisory = existing["advisory_interventions_count"] + advisory_count
+
+            if best_val >= existing["best_validity"]:
+                final_val = best_val
+                final_cand = best_cand
+                final_clean = best_clean
+                final_fail = fail_reason
+            else:
+                final_val = existing["best_validity"]
+                final_cand = existing["best_candidate_str"]
+                final_clean = existing["best_clean_formula"]
+                final_fail = existing["failure_reason"]
+
+            final_status = "SOLVED" if (existing["status"] == "SOLVED" or is_solved) else "UNSOLVED"
+
+            with self.conn:
+                self.conn.execute("""
+                    UPDATE target_registry
+                    SET status = ?, attempts_count = ?, total_generations = ?, total_evaluations = ?,
+                        total_time_sec = ?, best_validity = ?, best_candidate_str = ?, best_clean_formula = ?,
+                        failure_reason = ?, advisory_interventions_count = ?, last_attempted = ?, last_experiment_id = ?
+                    WHERE target_str = ?
+                """, (
+                    final_status, new_attempts, new_gens, new_evals, new_time,
+                    final_val, final_cand, final_clean, final_fail, new_advisory,
+                    now, experiment_id, t_str
+                ))
+            first_att = existing["first_attempted"]
+        else:
+            with self.conn:
+                self.conn.execute("""
+                    INSERT INTO target_registry
+                    (target_str, clean_target, domain_mode, status, attempts_count, total_generations,
+                     total_evaluations, total_time_sec, best_validity, best_candidate_str, best_clean_formula,
+                     failure_reason, advisory_interventions_count, first_attempted, last_attempted, last_experiment_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    t_str, c_target, domain_mode, status, 1, generations,
+                    evaluations, time_sec, best_val, best_cand, best_clean,
+                    fail_reason, advisory_count, now, now, experiment_id
+                ))
+            first_att = now
+            final_status = status
+            new_attempts = 1
+            new_gens = generations
+            new_evals = evaluations
+            new_time = time_sec
+            final_val = best_val
+            final_cand = best_cand
+            final_clean = best_clean
+            final_fail = fail_reason
+            new_advisory = advisory_count
+
+        return TargetEffortRecord(
+            target_str=t_str,
+            clean_target=c_target,
+            domain_mode=domain_mode,
+            status=final_status,
+            attempts_count=new_attempts,
+            total_generations=new_gens,
+            total_evaluations=new_evals,
+            total_time_sec=new_time,
+            best_validity=final_val,
+            best_candidate_str=final_cand,
+            best_clean_formula=final_clean,
+            failure_reason=final_fail,
+            advisory_interventions_count=new_advisory,
+            first_attempted=first_att,
+            last_attempted=now,
+            last_experiment_id=experiment_id,
+        )
+
+    def sync_target_registry_from_history(self) -> int:
+        """Backfill target_registry from historical search_history and verified theorems."""
+        from evolutionary_math.utils.formatting import format_clean_target, format_clean_formula
+
+        cursor = self.conn.cursor()
+
+        # 1. Sync all solved theorems
+        cursor.execute("SELECT target_str, clean_target, generation, timestamp, experiment_id FROM theorems")
+        solved_rows = cursor.fetchall()
+        for r in solved_rows:
+            t_str = r["target_str"]
+            c_target = r["clean_target"] or format_clean_target(t_str)
+            mode = "trigonometry" if any(w in t_str for w in ["sin", "cos", "tan"]) else ("geometry" if any(w in t_str for w in ["sqrt", "a", "b"]) else "algebra")
+            cursor.execute("SELECT 1 FROM target_registry WHERE target_str = ?", (t_str,))
+            if cursor.fetchone():
+                with self.conn:
+                    self.conn.execute("UPDATE target_registry SET status = 'SOLVED', best_validity = 1.0, failure_reason = 'Formally verified' WHERE target_str = ?", (t_str,))
+            else:
+                with self.conn:
+                    self.conn.execute("""
+                        INSERT INTO target_registry
+                        (target_str, clean_target, domain_mode, status, attempts_count, total_generations,
+                         total_evaluations, total_time_sec, best_validity, best_candidate_str, best_clean_formula,
+                         failure_reason, advisory_interventions_count, first_attempted, last_attempted, last_experiment_id)
+                        VALUES (?, ?, ?, 'SOLVED', 1, ?, ?, ?, 1.0, ?, ?, 'Formally verified', 0, ?, ?, ?)
+                    """, (
+                        t_str, c_target, mode, r["generation"], r["generation"] * 160,
+                        float(r["generation"]) * 0.05, c_target, c_target,
+                        r["timestamp"] or time.time(), r["timestamp"] or time.time(), r["experiment_id"]
+                    ))
+
+        # 2. Sync all historical search targets from search_history
+        cursor.execute("""
+            SELECT 
+                target_str,
+                COUNT(DISTINCT experiment_id) AS attempts,
+                MAX(generation) AS max_gen,
+                MAX(validity) AS max_val,
+                MIN(timestamp) AS min_ts,
+                MAX(timestamp) AS max_ts,
+                experiment_id
+            FROM search_history
+            GROUP BY target_str
+        """)
+        hist_rows = cursor.fetchall()
+        synced_count = 0
+
+        for r in hist_rows:
+            t_str = r["target_str"]
+            c_target = format_clean_target(t_str)
+            mode = "trigonometry" if any(w in t_str for w in ["sin", "cos", "tan"]) else ("geometry" if any(w in t_str for w in ["sqrt", "a", "b"]) else "algebra")
+
+            # Find best candidate and failure reason from search_history
+            cursor.execute("""
+                SELECT candidate_str, clean_formula, reason, status
+                FROM search_history
+                WHERE target_str = ? AND validity = ?
+                LIMIT 1
+            """, (t_str, r["max_val"]))
+            best_row = cursor.fetchone()
+            best_cand = best_row["candidate_str"] if best_row else None
+            best_clean = (best_row["clean_formula"] if best_row else None) or (format_clean_formula(best_cand) if best_cand else None)
+            reason = (best_row["reason"] if best_row else None) or f"Falsified (highest validity: {r['max_val']:.4f})"
+
+            is_solved = self.is_target_solved(t_str)
+            if best_row and (
+                "formally proven" in (best_row["reason"] or "").lower()
+                or "subsumed" in (best_row["reason"] or "").lower()
+                or (best_row["status"] or "") == "breakthrough"
+            ):
+                is_solved = True
+
+            status = "SOLVED" if is_solved else "UNSOLVED"
+
+            cursor.execute("SELECT 1 FROM target_registry WHERE target_str = ?", (t_str,))
+            if cursor.fetchone():
+                if is_solved:
+                    with self.conn:
+                        self.conn.execute("""
+                            UPDATE target_registry 
+                            SET status = 'SOLVED', best_validity = 1.0, failure_reason = ? 
+                            WHERE target_str = ?
+                        """, (reason, t_str))
+                continue
+
+            max_gen = r["max_gen"] or 50
+            evals = max_gen * 160 * max(1, r["attempts"])
+            time_est = max_gen * 0.04 * max(1, r["attempts"])
+
+            with self.conn:
+                self.conn.execute("""
+                    INSERT INTO target_registry
+                    (target_str, clean_target, domain_mode, status, attempts_count, total_generations,
+                     total_evaluations, total_time_sec, best_validity, best_candidate_str, best_clean_formula,
+                     failure_reason, advisory_interventions_count, first_attempted, last_attempted, last_experiment_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+                """, (
+                    t_str, c_target, mode, status, max(1, r["attempts"]), max_gen,
+                    evals, time_est, r["max_val"], best_cand, best_clean,
+                    reason, r["min_ts"] or time.time(), r["max_ts"] or time.time(), r["experiment_id"]
+                ))
+            synced_count += 1
+
+        return synced_count
+
+    def get_unsolved_targets(
+        self,
+        domain_mode: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> List[TargetEffortRecord]:
+        """Retrieve all unsolved target problem spaces ordered by best validity and effort."""
+        cursor = self.conn.cursor()
+        query = "SELECT * FROM target_registry WHERE status = 'UNSOLVED'"
+        params: List[Any] = []
+        if domain_mode:
+            query += " AND domain_mode = ?"
+            params.append(domain_mode.lower())
+        query += " ORDER BY best_validity DESC, total_evaluations DESC"
+        if limit:
+            query += f" LIMIT {int(limit)}"
+
+        cursor.execute(query, tuple(params))
+        rows = cursor.fetchall()
+        return [self._row_to_target_record(r) for r in rows]
+
+    def get_all_target_records(
+        self,
+        domain_mode: Optional[str] = None,
+        status: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> List[TargetEffortRecord]:
+        """Retrieve all registered target spaces (both solved and unsolved)."""
+        cursor = self.conn.cursor()
+        query = "SELECT * FROM target_registry"
+        clauses = []
+        params: List[Any] = []
+        if domain_mode:
+            clauses.append("domain_mode = ?")
+            params.append(domain_mode.lower())
+        if status:
+            clauses.append("status = ?")
+            params.append(status.upper())
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += " ORDER BY status ASC, best_validity DESC"
+        if limit:
+            query += f" LIMIT {int(limit)}"
+        cursor.execute(query, tuple(params))
+        rows = cursor.fetchall()
+        return [self._row_to_target_record(r) for r in rows]
+
+    def get_target_effort(self, target_str: str) -> Optional[TargetEffortRecord]:
+        """Retrieve effort record for a specific target string."""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM target_registry WHERE target_str = ?", (str(target_str),))
+        row = cursor.fetchone()
+        return self._row_to_target_record(row) if row else None
+
+    def _row_to_target_record(self, r: sqlite3.Row) -> TargetEffortRecord:
+        return TargetEffortRecord(
+            target_str=r["target_str"],
+            clean_target=r["clean_target"],
+            domain_mode=r["domain_mode"],
+            status=r["status"],
+            attempts_count=r["attempts_count"],
+            total_generations=r["total_generations"],
+            total_evaluations=r["total_evaluations"],
+            total_time_sec=r["total_time_sec"],
+            best_validity=r["best_validity"],
+            best_candidate_str=r["best_candidate_str"],
+            best_clean_formula=r["best_clean_formula"],
+            failure_reason=r["failure_reason"],
+            advisory_interventions_count=r["advisory_interventions_count"],
+            first_attempted=r["first_attempted"],
+            last_attempted=r["last_attempted"],
+            last_experiment_id=r["last_experiment_id"],
+        )
 
     def enrich_all_theorems(self, force: bool = False) -> int:
         """Backfill existing database records with human-readable names, clean notation, expanded polynomials, and explanations."""
@@ -504,17 +873,22 @@ class KnowledgeBase:
         cursor.execute("SELECT 1 FROM theorems WHERE canonical_sexpr = ? LIMIT 1", (canon,))
         return cursor.fetchone() is not None
 
-    def is_target_solved(self, target_lhs: ExprNode) -> bool:
+    def is_target_solved(self, target_lhs: Union[ExprNode, str]) -> bool:
         """Check if a target problem space has already been solved or is subsumed by a generalized theorem."""
         target_str = str(target_lhs)
         cursor = self.conn.cursor()
-        cursor.execute("SELECT 1 FROM theorems WHERE target_str = ? LIMIT 1", (target_str,))
+        cursor.execute("SELECT 1 FROM theorems WHERE target_str = ? OR clean_target = ? LIMIT 1", (target_str, target_str))
         if cursor.fetchone() is not None:
             return True
 
         # Check subsumption against all stored generalized meta-theorems
-        if self.find_subsuming_theorem(target_lhs) is not None:
-            return True
+        try:
+            from evolutionary_math.core.ast import parse_expr_str
+            ast_node = target_lhs if isinstance(target_lhs, ExprNode) else parse_expr_str(target_str)
+            if self.find_subsuming_theorem(ast_node) is not None:
+                return True
+        except Exception:
+            pass
 
         return False
 

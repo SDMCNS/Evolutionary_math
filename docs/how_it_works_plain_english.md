@@ -311,8 +311,27 @@ python -m evolutionary_math.cli discover --target sum_k2 --db my_research.db
 # 2. View all discovered theorems in plain English
 python -m evolutionary_math.cli list --db my_research.db
 
-# 3. View the full search history fishbone diagram in your browser
+# 3. Inspect open targets and cumulative search effort on the research frontier
+python -m evolutionary_math.cli frontier --db my_research.db
+
+# 4. View the full search history fishbone diagram in your browser
 python -m evolutionary_math.cli fishbone --db my_research.db --format html -o fishbone.html
 start fishbone.html
 ```
+
+---
+
+## 7. How Does the Engine Track Unsolved Targets & Effort?
+
+Not every problem can be solved in the first few generations. In mathematics, **knowing what has not yet been solved and documenting the computational effort invested is just as important as recording successes**:
+
+1. **Persistent Target Registry (`target_registry` table):**
+   Every time an island search tackles a problem, the database records the target, the total attempts, evolutionary generations, candidate formulas evaluated, dedicated CPU time, highest numerical validity score reached, and the closest "near-miss" formula.
+
+2. **Diagnosing Failure Barriers:**
+   When a search stops without a proof, the engine records *why* it stopped: did it fail on counterexamples? Did it hit a continuous residual error? Or did it run out of search depth?
+
+3. **Frontier Reports (`FRONTIER.md`):**
+   Running `python -m evolutionary_math.cli frontier --export-md FRONTIER.md` generates an active research paper summarizing all open targets, ordered by nearest-miss validity, complete with an Ishikawa fishbone diagram of the search attempts.
+
 

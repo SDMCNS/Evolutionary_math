@@ -363,14 +363,14 @@ def generate_fishbone_svg(branches: List[SearchBranchRecord], title: str = "Evol
         svg_parts.append(f'    <text x="{box_x + 10}" y="{box_y + 49}" font-size="10" fill="#f87171">{f_reason}</text>')
         svg_parts.append(f'  </g>')
 
-    # 3. Fish Head (Formally Verified Breakthrough)
-    breakthrough = next((b for b in milestones if b.status == "breakthrough"), milestones[-1] if milestones else None)
-    if breakthrough:
-        head_x = end_x + 30
-        head_w = 220
-        head_h = 84
-        head_y = spine_y - (head_h / 2)
+    # 3. Fish Head (Formally Verified Breakthrough or Open Frontier Target)
+    breakthrough = next((b for b in milestones if b.status == "breakthrough"), None)
+    head_x = end_x + 30
+    head_w = 230
+    head_h = 84
+    head_y = spine_y - (head_h / 2)
 
+    if breakthrough:
         b_formula = html.escape(breakthrough.clean_formula)
         b_proof = html.escape(breakthrough.reason or "Formally Verified")
 
@@ -384,6 +384,23 @@ def generate_fishbone_svg(branches: List[SearchBranchRecord], title: str = "Evol
         svg_parts.append(f'    <text x="{head_x + 16}" y="{head_y + 26}" font-size="12" font-weight="800" fill="#86efac">🏆 THEOREM PROVEN</text>')
         svg_parts.append(f'    <text x="{head_x + 16}" y="{head_y + 52}" font-size="17" font-weight="800" fill="#ffffff">{b_formula}</text>')
         svg_parts.append(f'    <text x="{head_x + 16}" y="{head_y + 72}" font-size="10" fill="#bbf7d0">Gen {breakthrough.generation} | {b_proof[:28]}</text>')
+        svg_parts.append(f'  </g>')
+    else:
+        # Open / Unsolved target
+        best_cand = milestones[-1] if milestones else max(branches, key=lambda b: b.validity, default=branches[0])
+        b_formula = html.escape((best_cand.clean_formula or best_cand.candidate_str or "Pending Hypothesis")[:24])
+        val_pct = best_cand.validity * 100.0
+
+        # Head connecting connector (amber dashed)
+        svg_parts.append(f'  <line x1="{end_x}" y1="{spine_y}" x2="{head_x}" y2="{spine_y}" stroke="#f59e0b" stroke-width="4" stroke-dasharray="4 4"/>')
+        svg_parts.append(f'  <circle cx="{end_x}" cy="{spine_y}" r="12" fill="#d97706" stroke="#ffffff" stroke-width="3" filter="url(#shadow)"/>')
+
+        svg_parts.append(f'  <!-- Fish Head / Open Frontier Target -->')
+        svg_parts.append(f'  <g filter="url(#shadow)">')
+        svg_parts.append(f'    <rect x="{head_x}" y="{head_y}" width="{head_w}" height="{head_h}" rx="12" fill="#451a03" stroke="#f59e0b" stroke-width="3"/>')
+        svg_parts.append(f'    <text x="{head_x + 16}" y="{head_y + 26}" font-size="12" font-weight="800" fill="#fcd34d">🔬 OPEN TARGET (UNSOLVED)</text>')
+        svg_parts.append(f'    <text x="{head_x + 16}" y="{head_y + 52}" font-size="16" font-weight="800" fill="#ffffff">{b_formula}</text>')
+        svg_parts.append(f'    <text x="{head_x + 16}" y="{head_y + 72}" font-size="10" fill="#fde68a">Max Validity: {val_pct:.2f}% | Open Frontier</text>')
         svg_parts.append(f'  </g>')
 
     svg_parts.append('</svg>')
@@ -400,7 +417,7 @@ def generate_fishbone_html(branches: List[SearchBranchRecord], title: str = "Mat
     milestones = [b for b in branches if b.status in ("milestone", "breakthrough")]
     failures = [b for b in branches if b.status in ("falsified", "stagnant")]
     interventions = [b for b in branches if b.status == "intervention"]
-    breakthrough = next((b for b in branches if b.status == "breakthrough"), milestones[-1] if milestones else None)
+    breakthrough = next((b for b in branches if b.status == "breakthrough"), None)
 
     table_rows = []
     for b in branches:
@@ -449,7 +466,13 @@ def generate_fishbone_html(branches: List[SearchBranchRecord], title: str = "Mat
           <div class="text-xl font-bold text-white font-mono mt-0.5">{html.escape(breakthrough.clean_formula)}</div>
           <div class="text-xs text-emerald-300/80 mt-1">Proven Gen {breakthrough.generation} via CAS Induction</div>
         </div>
-        ''' if breakthrough else ''}
+        ''' if breakthrough else f'''
+        <div class="bg-amber-950/40 border border-amber-500/40 rounded-xl p-4 text-right">
+          <div class="text-xs font-semibold text-amber-400 uppercase tracking-wider">Open Frontier Target</div>
+          <div class="text-xl font-bold text-white font-mono mt-0.5">{html.escape((milestones[-1].clean_formula if milestones else branches[0].clean_formula or "Unsolved")[:24])}</div>
+          <div class="text-xs text-amber-300/80 mt-1">Status: Unsolved | Highest Validity: {(max((b.validity for b in branches), default=0.0)*100.0):.2f}%</div>
+        </div>
+        '''}
       </div>
 
       <!-- Quick Metrics Grid -->

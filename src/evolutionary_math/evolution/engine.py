@@ -132,7 +132,7 @@ class EvolutionEngine:
                 timestamp=time.time(),
             )
             self.kb.record_branch(rec)
-            return EngineRunResult(
+            run_res = EngineRunResult(
                 success=True,
                 discovered_theorem=gen_th,
                 total_generations=0,
@@ -140,6 +140,8 @@ class EvolutionEngine:
                 telemetry_history=[],
                 advisory_interventions_count=0,
             )
+            self.kb.record_target_attempt(target_lhs, run_res, domain_mode=self.mode, experiment_id=experiment_id)
+            return run_res
 
         # 0b. Auto-generalization: If target belongs to an unproven parametric family, solve & prove generalized meta-theorem
         from evolutionary_math.core.generalization import extract_parametric_family
@@ -177,7 +179,7 @@ class EvolutionEngine:
                         timestamp=time.time(),
                     )
                     self.kb.record_branch(rec)
-                    return EngineRunResult(
+                    run_res = EngineRunResult(
                         success=True,
                         discovered_theorem=gen_th,
                         total_generations=0,
@@ -185,6 +187,8 @@ class EvolutionEngine:
                         telemetry_history=[],
                         advisory_interventions_count=0,
                     )
+                    self.kb.record_target_attempt(target_lhs, run_res, domain_mode=self.mode, experiment_id=experiment_id)
+                    return run_res
 
         if self.advisory_controller is not None:
             self.advisory_controller.reset_for_target()
@@ -372,7 +376,7 @@ class EvolutionEngine:
                 search_branches.append(rec_bt)
                 self.kb.record_branches(search_branches)
 
-                return EngineRunResult(
+                run_res = EngineRunResult(
                     success=True,
                     discovered_theorem=stored,
                     total_generations=gen,
@@ -380,6 +384,9 @@ class EvolutionEngine:
                     telemetry_history=telemetry_history,
                     advisory_interventions_count=advisory_interventions,
                 )
+                if self.kb is not None:
+                    self.kb.record_target_attempt(target_lhs, run_res, domain_mode=self.mode, experiment_id=experiment_id)
+                return run_res
 
             # 6. Periodic Ring Migration between islands
             if gen % self.migration_interval == 0 and len(self.islands) > 1:
@@ -388,7 +395,7 @@ class EvolutionEngine:
         # Reached max generations without formal verification
         self.kb.record_branches(search_branches)
         elapsed = time.perf_counter() - start_time
-        return EngineRunResult(
+        run_res = EngineRunResult(
             success=False,
             discovered_theorem=None,
             total_generations=max_generations,
@@ -396,6 +403,9 @@ class EvolutionEngine:
             telemetry_history=telemetry_history,
             advisory_interventions_count=advisory_interventions,
         )
+        if self.kb is not None:
+            self.kb.record_target_attempt(target_lhs, run_res, domain_mode=self.mode, experiment_id=experiment_id)
+        return run_res
 
     def _migrate_ring(self) -> None:
         """Execute unidirectional ring migration among islands: 0 -> 1 -> 2 -> ... -> 0."""

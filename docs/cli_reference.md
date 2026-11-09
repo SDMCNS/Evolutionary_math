@@ -19,6 +19,7 @@ Available subcommands:
 - `graph`: Export a Mermaid dependency flowchart showing how theorems compose earlier lemmas.
 - `latex`: Export all verified discoveries formatted in LaTeX math syntax.
 - `targets`: List all built-in example presets and instructions.
+- `frontier`: Inspect open/unsolved mathematical targets, cumulative search effort, near-misses, and failure modes.
 
 ---
 
@@ -221,5 +222,41 @@ You can also pass arbitrary custom summands directly:
 python src/evolutionary_math/cli.py discover --target "2*k + 1"
 python src/evolutionary_math/cli.py discover --target "k^2 + 3*k"
 ```
+
+---
+
+## 8. `frontier` Subcommand
+
+Track and document targets that the evolutionary engine has explored but **not yet formally proven**, capturing the cumulative computational effort (attempts, generations, individual candidate evaluations, CPU runtime), highest validity score reached, nearest-miss algebraic hypothesis, and specific falsification/failure barriers.
+
+```powershell
+python src/evolutionary_math/cli.py frontier [options]
+```
+
+### Options:
+| Flag | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `--db` | string | `autonomous_discoveries.db` | SQLite database file tracking search history and target registry |
+| `--mode` | choice | `all` | Filter frontier by domain mode: `algebra`, `trigonometry`, `geometry`, `calculus`, `all` |
+| `--limit` | integer | `25` | Maximum number of open targets to display |
+| `--export-md` | string | `None` | Export publication-ready Markdown report to file (e.g. `FRONTIER.md`) |
+| `--title` | string | `Active Mathematical Research Frontier...` | Custom title for Markdown export |
+| `--unattempted` | flag | `False` | Display unattempted curriculum targets waiting on the horizon |
+
+### Examples:
+```powershell
+# View top 10 open unsolved targets in terminal
+python src/evolutionary_math/cli.py frontier --limit 10
+
+# Export comprehensive FRONTIER.md tracking all open targets and effort
+python src/evolutionary_math/cli.py frontier --export-md FRONTIER.md
+
+# Inspect open targets in trigonometry
+python src/evolutionary_math/cli.py frontier --mode trigonometry
+
+# View unattempted curriculum targets waiting on horizon
+python src/evolutionary_math/cli.py frontier --unattempted
+```
+
 
 

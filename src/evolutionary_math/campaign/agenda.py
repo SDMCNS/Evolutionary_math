@@ -187,4 +187,9 @@ class ProblemSpaceAgenda:
             yield expr_factory.op("sum", expr_factory.op("^", k, p_const), n)
             p += 1
 
+    def get_curriculum_targets(self) -> List[ExprNode]:
+        """Return the finite sequence of core curriculum targets for the active mode."""
+        return list(self.generate_targets(continuous=False))
+
+
 
