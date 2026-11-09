@@ -24,9 +24,11 @@ class AutonomousDiscoveryCampaign:
         generations_per_target: int = 50,
         mode: str = "algebra",
         seed: Optional[int] = 42,
+        shape_seed: Optional[str] = None,
     ):
         self.kb = knowledge_base or KnowledgeBase("autonomous_discoveries.db")
-        self.agenda = agenda or ProblemSpaceAgenda(mode=mode)
+        self.shape_seed = shape_seed
+        self.agenda = agenda or ProblemSpaceAgenda(mode=mode, shape_seed=shape_seed)
         self.advisory_controller = advisory_controller
         self.num_islands = num_islands
         self.island_population_size = island_population_size

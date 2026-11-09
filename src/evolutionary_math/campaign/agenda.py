@@ -7,8 +7,9 @@ from evolutionary_math.core.ast import ExprNode, expr_factory
 class ProblemSpaceAgenda:
     """Generates an evolving stream of mathematical target problem spaces for autonomous discovery."""
 
-    def __init__(self, mode: str = "algebra"):
+    def __init__(self, mode: str = "algebra", shape_seed: Optional[str] = None):
         self.mode = mode.lower()
+        self.shape_seed = shape_seed.lower() if shape_seed else None
         self._custom_queue: List[ExprNode] = []
 
     def queue_target(self, target: ExprNode) -> None:
@@ -66,6 +67,16 @@ class ProblemSpaceAgenda:
             return
 
         if self.mode == "geometry":
+            from evolutionary_math.core.seeds import get_geometric_seed, list_geometric_seeds
+
+            # If a specific physical shape seed was designated, focus evolution on its observable goals
+            if self.shape_seed:
+                seed = get_geometric_seed(self.shape_seed)
+                if seed:
+                    for g in seed.goals:
+                        yield g.target_ast
+                    return
+
             from evolutionary_math.core.ast import parse_expr_str
             geom_targets = [
                 "2 * (a + b)",                       # Rectangle perimeter

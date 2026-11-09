@@ -139,12 +139,38 @@ python src/evolutionary_math/cli.py discover --mode trigonometry --target "sin(x
 python src/evolutionary_math/cli.py discover --mode geometry --target "2 * (a + b)"
 ```
 
-### 3. Run All Tests (86 Tests)
+### 3. Run All Tests (93 Tests)
 ```powershell
 python -m pytest tests/ -v
 ```
 
-### 4. Parametric Meta-Theorems & Database Consolidation (`consolidate`)
+### 4. Grounded Physical & Geometric Seeds (`seeds`, `--shape`, `--feature`)
+Evolution in the physical world does not operate in an abstract vacuum—it begins with tangible environments and observable raw materials (edges, side lengths, angles, parallel lines, perpendicular orthogonal intersections, heights, and radii). 
+
+We don't automatically know how these features work together to make shapes predictable, but an evolutionary population can experiment with combinations of these observable features to discover predictable aspects and invariants across 2D and 3D space:
+
+```powershell
+# 1. View all available shape environments and observable features
+python src/evolutionary_math/cli.py seeds
+
+# 2. Launch an autonomous campaign constrained to a shape environment
+python src/evolutionary_math/cli.py campaign --mode geometry --shape right_triangle
+python src/evolutionary_math/cli.py campaign --mode geometry --shape rectangle
+
+# 3. Target a specific predictable feature to discover from observable clues
+python src/evolutionary_math/cli.py discover --shape right_triangle --feature hypotenuse
+python src/evolutionary_math/cli.py discover --shape rectangle --feature area
+```
+
+Available shape seeds:
+- `rectangle` (2D): Width $a$, height $b$, parallel edges ($a \parallel a, b \parallel b$), four $90^\circ$ perpendicular corners $\to$ discovers perimeter $2(a+b)$, area $a \cdot b$, and diagonal $\sqrt{a^2+b^2}$.
+- `right_triangle` (2D): Perpendicular legs ($a \perp b$), hypotenuse $c \to$ discovers Pythagorean theorem $\sqrt{a^2+b^2}$ and area $(ab)/2$.
+- `general_triangle` (2D): Sides $a, b, c$, altitude $h \to$ discovers perimeter $a+b+c$, semi-perimeter $(a+b+c)/2$, and area $(ah)/2$.
+- `trapezoid` (2D): Parallel bases ($a \parallel b$), height $h \to$ discovers area $((a+b)h)/2$ and median $(a+b)/2$.
+- `circle` (2D): Radius $r$, diameter $d \to$ discovers diameter $2r$ and quadratic area scale $r^2$.
+- `cuboid` (3D Box): Orthogonal axes ($a \perp b \perp c$), 3 pairs of parallel faces $\to$ discovers volume $abc$, surface area $2(ab+bc+ca)$, and 3D space diagonal $\sqrt{a^2+b^2+c^2}$.
+
+### 5. Parametric Meta-Theorems & Database Consolidation (`consolidate`)
 Instead of generating hundreds of redundant theorems differing only by an incrementing number (e.g. $\sum k(k + 1), \sum k(k + 2), \dots, \sum k(k + 110)$), the engine lifts the numeric offset into a symbolic parameter $m$, formally proves the **generalized master theorem** across all $n$ and $m$:
 $$\sum_{k=1}^n k(k + m) = \frac{n(n + 1)(2n + 3m + 1)}{6}$$
 All concrete instances ($m=1, 2, \dots, 110, \dots$) are automatically **subsumed** and solved instantly without generating duplicate rows in the database.
@@ -154,7 +180,7 @@ To consolidate existing databases and purge repetitive concrete iterations:
 python src/evolutionary_math/cli.py consolidate --db autonomous_discoveries.db
 ```
 
-### 5. Active Mathematical Research Frontier (`frontier`)
+### 6. Active Mathematical Research Frontier (`frontier`)
 Document problem spaces that the engine has explored but **not yet formally proven**, capturing the cumulative computational effort (attempts, generations, individual candidate evaluations, CPU runtime), highest validity score reached, nearest-miss algebraic hypothesis, and specific falsification/failure barriers:
 ```powershell
 # Inspect the top open targets and cumulative effort
@@ -167,7 +193,7 @@ python src/evolutionary_math/cli.py frontier --mode trigonometry
 python src/evolutionary_math/cli.py frontier --db autonomous_discoveries.db --export-md FRONTIER.md
 ```
 
-### 6. Graceful Interrupts & Working Population Auto-Resume (`--fresh`)
+### 7. Graceful Interrupts & Working Population Auto-Resume (`--fresh`)
 Pressing `Ctrl+C` during an evolutionary search captures the interrupt signal, finishes the current evaluation, serializes the active population across all islands (including all candidate formulas, ASTs, fitness vectors, and generations), and saves it to a persistent SQLite checkpoint.
 Re-running the command seamlessly resumes from where it was interrupted:
 ```powershell
@@ -181,7 +207,7 @@ python src/evolutionary_math/cli.py discover --target "sum_k=1..n(k^5)" --genera
 python src/evolutionary_math/cli.py discover --target "sum_k=1..n(k^5)" --fresh
 ```
 
-### 7. Run Autonomous Continuous Discovery Campaign
+### 8. Run Autonomous Continuous Discovery Campaign
 ```powershell
 # Continuous campaign in algebra domain
 python src/evolutionary_math/cli.py campaign --mode algebra --continuous --db research.db
@@ -193,12 +219,12 @@ python src/evolutionary_math/cli.py campaign --mode trigonometry --continuous --
 python src/evolutionary_math/cli.py campaign --continuous --llm-url http://localhost:1234/v1 --llm-model qwen/qwen3.5-9b
 ```
 
-### 8. List Stored Discoveries & Plain-English Intuition
+### 9. List Stored Discoveries & Plain-English Intuition
 ```powershell
 python src/evolutionary_math/cli.py list --db research.db
 ```
 
-### 9. Visualize the Cumulative Lemma Graph
+### 10. Visualize the Cumulative Lemma Graph
 ```powershell
 python src/evolutionary_math/cli.py graph --db research.db
 ```

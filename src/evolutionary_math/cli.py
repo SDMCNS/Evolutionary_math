@@ -296,13 +296,61 @@ def cmd_targets(args):
     print("=" * 96)
 
 
+def cmd_seeds(args):
+    """Display catalog of observable geometric shape seeds and their discoverable features."""
+    from evolutionary_math.core.seeds import list_geometric_seeds
+    seeds = list_geometric_seeds()
+    print("=" * 96)
+    print("🌱 GROUNDED PHYSICAL & GEOMETRIC SEEDS (OBSERVABLE SHAPE ENVIRONMENTS)")
+    print("=" * 96)
+    for i, s in enumerate(seeds, start=1):
+        print(f"\n{i}. {s.name} ({s.dimension}D Environment) — id: '{s.id}'")
+        print(f"   Description:   {s.description}")
+        print("   Observable Features (The Raw Materials):")
+        for sym, desc in s.observable_features.items():
+            print(f"     • {sym:<6} : {desc}")
+        print("   Physical Constraints & Relationships:")
+        for prop in s.geometric_properties:
+            print(f"     • {prop}")
+        print("   Predictable Aspects to Discover:")
+        for g in s.goals:
+            print(f"     • [{g.predicted_feature}] {g.name}: {g.target_expr_str} ({g.mathematical_meaning})")
+        print(f"   Command to explore: python -m evolutionary_math.cli campaign --mode geometry --shape {s.id}")
+        print("-" * 96)
+    print("=" * 96)
+
+
 
 def cmd_discover(args):
     mode = getattr(args, "mode", "algebra")
-    if args.target in EXAMPLE_TARGETS and mode == "algebra":
-        mode = EXAMPLE_TARGETS[args.target].get("mode", "algebra")
+    target_lhs = None
 
-    target_lhs = get_target_expression(args.target, mode=mode)
+    if getattr(args, "shape", None):
+        from evolutionary_math.core.seeds import get_geometric_seed
+        seed = get_geometric_seed(args.shape)
+        if not seed:
+            from evolutionary_math.core.seeds import list_geometric_seeds
+            avail = ", ".join(s.id for s in list_geometric_seeds())
+            raise ValueError(f"Unknown shape seed '{args.shape}'. Available seeds: {avail}")
+        mode = "geometry"
+        feat = getattr(args, "feature", None)
+        goal = seed.get_goal(feat) if feat else seed.goals[0]
+        if not goal:
+            avail_goals = ", ".join(f"'{g.predicted_feature}'" for g in seed.goals)
+            raise ValueError(f"Unknown feature '{feat}' for {seed.name}. Available features: {avail_goals}")
+        target_lhs = goal.target_ast
+        print("=" * 80)
+        print(f"🌱 GROUNDED SHAPE ENVIRONMENT: {seed.name} ({seed.dimension}D)")
+        print(f"Observable Features: {', '.join(f'{k} ({v})' for k, v in seed.observable_features.items())}")
+        print(f"Target Feature:      {goal.predicted_feature} ({goal.name})")
+        print(f"Observable Clues:    {goal.observable_clues}")
+        print("=" * 80)
+    elif args.target in EXAMPLE_TARGETS and mode == "algebra":
+        mode = EXAMPLE_TARGETS[args.target].get("mode", "algebra")
+        target_lhs = get_target_expression(args.target, mode=mode)
+    else:
+        target_lhs = get_target_expression(args.target, mode=mode)
+
     kb = KnowledgeBase(args.db)
 
     # Configure optional LLM advisory interface
@@ -412,6 +460,7 @@ def cmd_campaign(args):
 
     max_theorems = None if args.continuous else args.max_theorems
 
+    shape_seed = getattr(args, "shape", None)
     campaign = AutonomousDiscoveryCampaign(
         knowledge_base=kb,
         advisory_controller=controller,
@@ -420,6 +469,7 @@ def cmd_campaign(args):
         generations_per_target=args.generations,
         mode=mode,
         seed=args.seed,
+        shape_seed=shape_seed,
     )
 
     print("=" * 80)
@@ -427,6 +477,13 @@ def cmd_campaign(args):
     print("=" * 80)
     print(f"Goal:            Discover {max_theorems if max_theorems else 'unlimited'} new mathematical theorems")
     print(f"Domain Mode:     {mode.title()} (Customized grammar & test points)")
+    if shape_seed:
+        from evolutionary_math.core.seeds import get_geometric_seed
+        seed = get_geometric_seed(shape_seed)
+        if seed:
+            print(f"Environment:     🌱 {seed.name} ({seed.dimension}D Shape Seed)")
+            print(f"Raw Features:    {', '.join(f'{k} ({v})' for k, v in seed.observable_features.items())}")
+            print(f"Constraints:     {'; '.join(seed.geometric_properties[:2])}")
     print(f"Storage:         SQLite Knowledge Base '{args.db}'")
     print(f"LLM Guidance:    {'Enabled' if controller else 'Disabled (Offline Heuristics)'}")
     print(f"Lemma Promotion: Enabled (Cumulative Knowledge Accumulation)")
@@ -750,6 +807,8 @@ def main():
     # 'discover' sub-command
     p_disc = subparsers.add_parser("discover", help="Run evolutionary search to discover a mathematical relationship")
     p_disc.add_argument("--target", default="sum_k", help="Target preset (e.g. sum_k, sum_k2, trig_pythagorean, geom_pythagorean) or mathematical formula string")
+    p_disc.add_argument("--shape", type=str, default=None, help="Grounded physical shape seed (e.g. rectangle, right_triangle, trapezoid, circle, cuboid)")
+    p_disc.add_argument("--feature", type=str, default=None, help="Target feature to predict from the shape seed (e.g. area, perimeter, hypotenuse)")
     p_disc.add_argument("--mode", choices=["algebra", "trigonometry", "geometry", "calculus"], default="algebra", help="Mathematical domain mode (sets grammar, evaluation domain, and operators)")
     p_disc.add_argument("--islands", type=int, default=4, help="Number of evolutionary islands")
     p_disc.add_argument("--pop-size", type=int, default=50, help="Population size per island")
@@ -771,6 +830,7 @@ def main():
     # 'campaign' sub-command (autonomous continuous discovery)
     p_camp = subparsers.add_parser("campaign", help="Set the engine loose on an autonomous discovery campaign")
     p_camp.add_argument("--mode", choices=["algebra", "trigonometry", "geometry", "calculus"], default="algebra", help="Mathematical domain mode for autonomous campaign")
+    p_camp.add_argument("--shape", type=str, default=None, help="Constrain campaign to a grounded shape environment (e.g. rectangle, right_triangle, trapezoid, circle, cuboid)")
     p_camp.add_argument("--max-theorems", type=int, default=3, help="Number of theorems to discover before stopping")
     p_camp.add_argument("--continuous", action="store_true", help="Run indefinitely, continuously discovering mathematics")
     p_camp.add_argument("--generations", type=int, default=45, help="Generations allocated per target problem space")
@@ -828,6 +888,10 @@ def main():
     p_targets = subparsers.add_parser("targets", help="List all available example targets with math descriptions")
     p_targets.add_argument("--mode", choices=["algebra", "trigonometry", "geometry", "calculus", "all"], default="all", help="Filter target catalog by domain mode")
     p_targets.set_defaults(func=cmd_targets)
+
+    # 'seeds' sub-command (catalog of grounded physical & geometric shape environments)
+    p_seeds = subparsers.add_parser("seeds", help="List grounded shape seeds, observable features, and geometric goals")
+    p_seeds.set_defaults(func=cmd_seeds)
 
     # 'consolidate' sub-command (merge redundant numerical iterations into general meta-theorems)
     p_cons = subparsers.add_parser("consolidate", help="Consolidate repetitive numerical iterations into unified generalized meta-theorems")
