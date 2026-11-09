@@ -1,7 +1,7 @@
 """Island population running a localized evolutionary search policy."""
 
 import random
-from typing import List, Set, Optional, Dict
+from typing import List, Set, Optional, Dict, Any
 from evolutionary_math.core.ast import ExprNode
 from evolutionary_math.core.canonicalizer import canonicalize
 from evolutionary_math.evaluation.pipeline import EvaluationPipeline
@@ -199,4 +199,75 @@ class Island:
         for i, imm in enumerate(immigrants):
             if i < len(self.population):
                 self.population[i] = imm
+
+    def serialize(self) -> Dict[str, Any]:
+        """Serialize island population and state to a JSON-compatible dictionary."""
+        pop_data = []
+        for ind in self.population:
+            pop_data.append({
+                "id": ind.id,
+                "candidate_ast": ind.candidate.to_dict(),
+                "candidate_str": str(ind.candidate),
+                "generation": ind.generation,
+                "parent_ids": list(ind.parent_ids),
+                "operator_applied": ind.operator_applied,
+                "fitness_vector": list(ind.fitness_vector),
+                "rank": ind.rank,
+                "crowding_distance": ind.crowding_distance,
+            })
+        return {
+            "island_id": self.island_id,
+            "population_size": self.population_size,
+            "regime": self.regime,
+            "generation": self.generation,
+            "population": pop_data,
+        }
+
+    def restore(
+        self,
+        data: Dict[str, Any],
+        pipeline: Optional[EvaluationPipeline] = None,
+        target_lhs: Optional[ExprNode] = None,
+    ) -> None:
+        """Restore island population and state from serialized data."""
+        from evolutionary_math.core.ast import expr_from_dict
+        from evolutionary_math.evolution.individual import Individual
+        from evolutionary_math.evolution.fitness import _extract_subexpr_sexprs
+
+        self.island_id = data.get("island_id", self.island_id)
+        self.regime = data.get("regime", self.regime)
+        self.generation = data.get("generation", 0)
+
+        restored_pop = []
+        for item in data.get("population", []):
+            try:
+                cand = expr_from_dict(item["candidate_ast"])
+                ind = Individual(
+                    candidate=cand,
+                    generation=item.get("generation", 0),
+                    id=item.get("id") or None,
+                    parent_ids=tuple(item.get("parent_ids", ())),
+                    operator_applied=item.get("operator_applied", None),
+                    fitness_vector=tuple(item.get("fitness_vector", (0.0, 0.0, 0.0))),
+                    rank=item.get("rank", 0),
+                    crowding_distance=item.get("crowding_distance", 0.0),
+                )
+                restored_pop.append(ind)
+            except Exception:
+                continue
+
+        if restored_pop:
+            if pipeline is not None and target_lhs is not None:
+                all_subexprs = set()
+                for ind in restored_pop:
+                    all_subexprs.update(_extract_subexpr_sexprs(ind.candidate))
+                for ind in restored_pop:
+                    fit_vec, eval_res = evaluate_individual_fitness(
+                        ind.candidate, target_lhs, pipeline, all_subexprs
+                    )
+                    ind.fitness_vector = fit_vec
+                    ind.evaluation_result = eval_res
+            self.population = restored_pop
+            self.population_size = len(restored_pop)
+
 

@@ -356,7 +356,12 @@ def cmd_discover(args):
         max_generations=args.generations,
         experiment_id=f"cli_{args.target}",
         callback=logger,
+        resume=not getattr(args, "fresh", False),
     )
+
+    if res.interrupted:
+        kb.close()
+        return
 
     print("-" * 80)
     if res.success and res.discovered_theorem:
@@ -458,6 +463,7 @@ def cmd_campaign(args):
         max_theorems=max_theorems,
         on_breakthrough=on_breakthrough,
         on_telemetry=on_telemetry,
+        resume=not getattr(args, "fresh", False),
     )
 
     print("\n" + "=" * 80)
@@ -759,6 +765,7 @@ def main():
     p_disc.add_argument("--llm-key", type=str, default="none", help="LLM API key")
     p_disc.add_argument("--llm-timeout", type=float, default=30.0, help="LLM HTTP timeout in seconds (default: 30.0)")
     p_disc.add_argument("--live", action="store_true", help="Display live terminal interactive dashboard")
+    p_disc.add_argument("--fresh", action="store_true", help="Discard saved checkpoint and start evolutionary search from scratch")
     p_disc.set_defaults(func=cmd_discover)
 
     # 'campaign' sub-command (autonomous continuous discovery)
@@ -777,6 +784,7 @@ def main():
     p_camp.add_argument("--llm-model", type=str, default="llama3", help="LLM model name")
     p_camp.add_argument("--llm-key", type=str, default="none", help="LLM API key")
     p_camp.add_argument("--llm-timeout", type=float, default=30.0, help="LLM HTTP timeout in seconds (default: 30.0)")
+    p_camp.add_argument("--fresh", action="store_true", help="Discard saved checkpoint and start autonomous campaign from scratch")
     p_camp.set_defaults(func=cmd_campaign)
 
     # 'list' sub-command

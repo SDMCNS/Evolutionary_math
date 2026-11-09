@@ -46,65 +46,112 @@ class AutonomousDiscoveryCampaign:
         max_theorems: Optional[int] = None,
         on_breakthrough: Optional[Callable[[StoredTheorem, EngineRunResult], None]] = None,
         on_telemetry: Optional[Callable[[ExprNode, DiscoveryTelemetry], None]] = None,
+        resume: bool = True,
     ) -> List[StoredTheorem]:
         """Launch the autonomous discovery campaign.
 
         If max_theorems is None, the campaign runs continuously/indefinitely across an infinite target stream.
+        If resume=True (default), seamlessly resumes any interrupted target and working population.
         """
         start_time = time.perf_counter()
+
+        if not resume:
+            self.kb.delete_checkpoint("campaign:active")
+        else:
+            active_cp = self.kb.load_checkpoint("campaign:active")
+            if active_cp:
+                try:
+                    from evolutionary_math.core.ast import parse_expr_str
+                    saved_target_str = active_cp["target_str"]
+                    saved_target = parse_expr_str(saved_target_str)
+                    if not self.kb.is_target_solved(saved_target):
+                        self.agenda.queue_target(saved_target)
+                        clean_tgt = active_cp.get("clean_target") or saved_target_str
+                        saved_gen = active_cp.get("current_generation", 0)
+                        print(f"🔄 Resuming autonomous campaign on in-progress target '{clean_tgt}' from Generation {saved_gen}...")
+                except Exception:
+                    pass
+
         target_stream = self.agenda.generate_targets()
 
         target_idx = 0
-        for target in target_stream:
-            target_idx += 1
-            if max_theorems is not None and len(self.discovered_theorems) >= max_theorems:
-                break
+        try:
+            for target in target_stream:
+                target_idx += 1
+                if max_theorems is not None and len(self.discovered_theorems) >= max_theorems:
+                    break
 
-            # Skip targets that have already been proven and recorded
-            if self.kb.is_target_solved(target):
-                continue
+                # Skip targets that have already been proven and recorded
+                if self.kb.is_target_solved(target):
+                    continue
 
-            # 1. Update grammar with all currently known lemmas
-            self.kb.promote_lemmas_to_grammar(self.grammar)
+                # 1. Update grammar with all currently known lemmas
+                self.kb.promote_lemmas_to_grammar(self.grammar)
 
-            # 2. Configure engine for this target
-            engine_seed = (self.seed + target_idx * 17) if self.seed is not None else None
-            engine = EvolutionEngine(
-                grammar=self.grammar,
-                num_islands=self.num_islands,
-                island_population_size=self.island_population_size,
-                migration_interval=5,
-                knowledge_base=self.kb,
-                advisory_controller=self.advisory_controller,
-                mode=self.mode,
-                auto_promote_lemmas=True,
-                seed=engine_seed,
-            )
+                # 2. Configure engine for this target
+                engine_seed = (self.seed + target_idx * 17) if self.seed is not None else None
+                engine = EvolutionEngine(
+                    grammar=self.grammar,
+                    num_islands=self.num_islands,
+                    island_population_size=self.island_population_size,
+                    migration_interval=5,
+                    knowledge_base=self.kb,
+                    advisory_controller=self.advisory_controller,
+                    mode=self.mode,
+                    auto_promote_lemmas=True,
+                    seed=engine_seed,
+                )
 
-            def telemetry_wrapper(telem: DiscoveryTelemetry):
-                if on_telemetry:
-                    on_telemetry(target, telem)
+                def telemetry_wrapper(telem: DiscoveryTelemetry):
+                    if on_telemetry:
+                        on_telemetry(target, telem)
 
-            # 3. Execute evolutionary search
-            result = engine.run(
-                target_lhs=target,
-                max_generations=self.generations_per_target,
-                experiment_id=f"campaign_target_{target_idx}",
-                callback=telemetry_wrapper if on_telemetry else None,
-            )
+                # 3. Execute evolutionary search with checkpoint support
+                result = engine.run(
+                    target_lhs=target,
+                    max_generations=self.generations_per_target,
+                    experiment_id=f"campaign_target_{target_idx}",
+                    callback=telemetry_wrapper if on_telemetry else None,
+                    resume=resume,
+                )
 
-            # 4. Handle breakthrough
-            if result.success and result.discovered_theorem is not None:
-                th = result.discovered_theorem
-                self.discovered_theorems.append(th)
+                # If user interrupted during this target search, record campaign active checkpoint and exit cleanly
+                if result.interrupted:
+                    self.kb.save_checkpoint(
+                        checkpoint_key="campaign:active",
+                        target_str=str(target),
+                        clean_target=result.discovered_theorem.clean_target if result.discovered_theorem else None,
+                        domain_mode=self.mode,
+                        current_generation=result.total_generations,
+                        max_generations=self.generations_per_target,
+                        experiment_id=f"campaign_target_{target_idx}",
+                        islands_data=[isl.serialize() for isl in engine.islands],
+                        meta={"target_idx": target_idx},
+                    )
+                    print("\n🛑 Autonomous discovery campaign paused by user!")
+                    print(f"💾 In-progress target and working population safely preserved in '{self.kb.db_path}'.")
+                    print("💡 Run the same command to seamlessly resume discovery right where you left off.\n")
+                    break
 
-                # Immediately promote new lemma into campaign grammar for subsequent targets
-                lemma_name = f"L_{th.id[:4]}"
-                if th.definition_ast is not None:
-                    self.grammar.promote_lemma(lemma_name, th.definition_ast)
+                # Target finished or proved: clear active campaign marker
+                self.kb.delete_checkpoint("campaign:active")
 
-                if on_breakthrough:
-                    on_breakthrough(th, result)
+                # 4. Handle breakthrough
+                if result.success and result.discovered_theorem is not None:
+                    th = result.discovered_theorem
+                    self.discovered_theorems.append(th)
+
+                    # Immediately promote new lemma into campaign grammar for subsequent targets
+                    lemma_name = f"L_{th.id[:4]}"
+                    if th.definition_ast is not None:
+                        self.grammar.promote_lemma(lemma_name, th.definition_ast)
+
+                    if on_breakthrough:
+                        on_breakthrough(th, result)
+
+        except KeyboardInterrupt:
+            print("\n🛑 Autonomous discovery campaign paused by user!")
+            print(f"💾 All active populations and {len(self.discovered_theorems)} theorems safely preserved in '{self.kb.db_path}'.\n")
 
         return self.discovered_theorems
 

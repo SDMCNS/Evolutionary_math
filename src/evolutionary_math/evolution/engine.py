@@ -12,7 +12,7 @@ from evolutionary_math.grammar.generator import ExpressionGenerator
 from evolutionary_math.evolution.individual import Individual
 from evolutionary_math.evolution.island import Island
 from evolutionary_math.storage.knowledge_base import KnowledgeBase, StoredTheorem, SearchBranchRecord
-from evolutionary_math.utils.formatting import format_clean_formula
+from evolutionary_math.utils.formatting import format_clean_formula, format_clean_target
 from evolutionary_math.advisory.controller import AdvisoryController
 from evolutionary_math.advisory.schema import AdvisoryResponse
 from evolutionary_math.evolution.rational_solver import ExactPolynomialSolver
@@ -40,6 +40,7 @@ class EngineRunResult:
     total_time_sec: float
     telemetry_history: List[DiscoveryTelemetry] = field(default_factory=list)
     advisory_interventions_count: int = 0
+    interrupted: bool = False
 
 
 class EvolutionEngine:
@@ -99,9 +100,17 @@ class EvolutionEngine:
         max_generations: int = 200,
         experiment_id: str = "exp",
         callback: Optional[Any] = None,
+        resume: bool = True,
+        checkpoint_key: Optional[str] = None,
+        checkpoint_interval: int = 1,
     ) -> EngineRunResult:
-        """Run the autonomous evolutionary discovery loop."""
+        """Run the autonomous evolutionary discovery loop.
+        
+        If resume=True (default), restores any active in-flight checkpoint from the knowledge base,
+        preserving the working population and continuing from the interrupted generation.
+        """
         start_time = time.perf_counter()
+        cp_key = checkpoint_key or f"target:{str(target_lhs)}"
 
         # 0. Check if target is already subsumed by an existing generalized theorem in KB
         subsuming = self.kb.find_subsuming_theorem(target_lhs)
@@ -193,16 +202,7 @@ class EvolutionEngine:
         if self.advisory_controller is not None:
             self.advisory_controller.reset_for_target()
 
-        # 1. Initialize all islands
-        for island in self.islands:
-            island.initialize(min_depth=2, max_depth=4)
-
-        # 1b. Exact polynomial finite difference solver (discrete calculus)
-        if self.enable_polynomial_solver and self.islands:
-            poly_candidates = ExactPolynomialSolver.solve(target_lhs)
-            for cand in poly_candidates:
-                self.islands[0].inject_individual(cand, operator_applied="discrete_calculus_solve")
-
+        start_gen = 1
         telemetry_history: List[DiscoveryTelemetry] = []
         target_str = str(target_lhs)
         search_branches: List[SearchBranchRecord] = []
@@ -212,187 +212,284 @@ class EvolutionEngine:
         total_evaluations = 0
         advisory_interventions = 0
 
-        for gen in range(1, max_generations + 1):
-            discovered: Optional[Individual] = None
-
-            # 2. Step each island
-            for island in self.islands:
-                disc = island.step(target_lhs, self.pipeline)
-                total_evaluations += island.population_size
-                if disc and disc.is_verified and discovered is None:
-                    discovered = disc
-
-            # 3. Check for strategic advisory intervention if enabled
-            intervention_note: Optional[str] = None
-            if self.advisory_controller is not None:
-                advice = self.advisory_controller.check_and_apply_guidance(
-                    generation=gen,
-                    islands=self.islands,
-                    grammar=self.grammar,
-                    known_lemmas_count=len(self.kb.get_all_theorems()),
-                )
-                if advice is not None:
-                    advisory_interventions += 1
-                    intervention_note = f"[{advice.regime_selection}] {advice.diagnosis[:60]}..."
-
-            # 4. Gather generation telemetry
-            all_individuals = [ind for island in self.islands for ind in island.population]
-            best_ind = max(all_individuals, key=lambda ind: ind.validity)
-            pareto_count = sum(1 for ind in all_individuals if ind.rank == 1)
-            elapsed = time.perf_counter() - start_time
-
-            # Record milestone improvement if validity advanced
-            if best_ind.validity > high_water_validity + 0.005:
-                high_water_validity = best_ind.validity
-                rec = SearchBranchRecord(
-                    id=best_ind.id,
-                    experiment_id=experiment_id,
-                    target_str=target_str,
-                    generation=gen,
-                    candidate_str=str(best_ind.candidate),
-                    clean_formula=format_clean_formula(best_ind.candidate),
-                    validity=best_ind.validity,
-                    status="milestone",
-                    operator=best_ind.operator_applied,
-                    parent_id=last_milestone_id,
-                    parent_str=last_milestone_str,
-                    reason=f"Validity advanced to {best_ind.validity:.4f}",
-                    timestamp=time.time(),
-                )
-                search_branches.append(rec)
-                last_milestone_id = best_ind.id
-                last_milestone_str = str(best_ind.candidate)
-
-            # Sample key falsified counterexamples to log failed branches
-            falsified = [
-                ind for ind in all_individuals 
-                if ind.validity < 0.99 and ind.evaluation_result and not ind.evaluation_result.is_verified
-            ]
-            if falsified and (gen % 4 == 1 or gen == 1 or gen == max_generations):
-                f_sample = max(falsified, key=lambda ind: ind.validity)
-                fail_reason = "Falsified on test domain"
-                if f_sample.evaluation_result and f_sample.evaluation_result.tier1_result:
-                    fail_reason = f"Fails test domain (residual {f_sample.evaluation_result.tier1_result.max_residual:.2f})"
-                rec_fail = SearchBranchRecord(
-                    id=f_sample.id,
-                    experiment_id=experiment_id,
-                    target_str=target_str,
-                    generation=gen,
-                    candidate_str=str(f_sample.candidate),
-                    clean_formula=format_clean_formula(f_sample.candidate),
-                    validity=f_sample.validity,
-                    status="falsified",
-                    operator=f_sample.operator_applied,
-                    parent_id=last_milestone_id,
-                    parent_str=last_milestone_str,
-                    reason=fail_reason,
-                    timestamp=time.time(),
-                )
-                search_branches.append(rec_fail)
-
-            if intervention_note:
-                rec_adv = SearchBranchRecord(
-                    id=f"adv_{gen}_{time.time_ns() % 10000}",
-                    experiment_id=experiment_id,
-                    target_str=target_str,
-                    generation=gen,
-                    candidate_str="",
-                    clean_formula="",
-                    validity=best_ind.validity,
-                    status="intervention",
-                    operator="advisory",
-                    parent_id=last_milestone_id,
-                    parent_str=last_milestone_str,
-                    reason=intervention_note,
-                    timestamp=time.time(),
-                )
-                search_branches.append(rec_adv)
-
-            telem = DiscoveryTelemetry(
-                generation=gen,
-                best_validity=best_ind.validity,
-                pareto_front_size=pareto_count,
-                total_individuals_evaluated=total_evaluations,
-                elapsed_time_sec=elapsed,
-                best_candidate_str=str(best_ind.candidate),
-                advisory_intervention=intervention_note,
-            )
-            telemetry_history.append(telem)
-
-            if callback:
-                callback(telem)
-
-            # 5. Check for breakthrough discovery
-            if discovered is not None:
-                # Generate plain-English intuitive explanation
-                client = self.advisory_controller.client if self.advisory_controller else None
-                if client is None:
-                    from evolutionary_math.advisory.client import MockAdvisoryClient
-                    client = MockAdvisoryClient()
-
-                try:
-                    from evolutionary_math.utils.formatting import to_latex
-                    latex_str = to_latex(discovered.candidate)
-                except Exception:
-                    latex_str = str(discovered.candidate)
-
-                proof_method = (discovered.evaluation_result.proof_method or "unknown") if discovered.evaluation_result else "symbolic_induction"
-                deps = list(self.kb._extract_dependencies(discovered.candidate))
-
-                try:
-                    explanation = client.explain_discovery(
-                        target_str=str(target_lhs),
-                        discovery_str=str(discovered.candidate),
-                        latex_str=latex_str,
-                        proof_method=proof_method,
-                        dependencies=deps,
+        resumed = False
+        if resume and self.kb is not None:
+            cp = self.kb.load_checkpoint(cp_key)
+            if cp is not None and cp.get("islands_data"):
+                saved_gen = cp["current_generation"]
+                if saved_gen < max_generations:
+                    islands_data = cp["islands_data"]
+                    for i, isl_data in enumerate(islands_data):
+                        if i < len(self.islands):
+                            self.islands[i].restore(isl_data, pipeline=self.pipeline, target_lhs=target_lhs)
+                    start_gen = saved_gen + 1
+                    meta = cp.get("meta", {})
+                    high_water_validity = meta.get("high_water_validity", -1.0)
+                    total_evaluations = meta.get("total_evaluations", 0)
+                    advisory_interventions = meta.get("advisory_interventions", 0)
+                    resumed = True
+                    total_inds = sum(len(isl.population) for isl in self.islands)
+                    target_clean = format_clean_target(target_lhs)
+                    print(
+                        f"🔄 Resuming in-progress search for '{target_clean}' from Generation {start_gen} "
+                        f"({total_inds} individuals preserved across {len(self.islands)} islands)..."
                     )
-                except Exception:
-                    explanation = f"Identity {target_lhs} = {discovered.candidate} verified via {proof_method}."
 
-                stored = self.kb.store_discovery(
-                    discovered, target_lhs, experiment_id=experiment_id, explanation=explanation
-                )
-                if self.auto_promote_lemmas and stored.definition_ast is not None:
-                    lemma_name = f"L_{stored.id[:4]}"
-                    self.grammar.promote_lemma(lemma_name, stored.definition_ast)
+        if not resumed:
+            if not resume and self.kb is not None:
+                self.kb.delete_checkpoint(cp_key)
 
-                # Record breakthrough in history
-                rec_bt = SearchBranchRecord(
-                    id=discovered.id,
-                    experiment_id=experiment_id,
-                    target_str=target_str,
+            # 1. Initialize all islands
+            for island in self.islands:
+                island.initialize(min_depth=2, max_depth=4)
+
+            # 1b. Exact polynomial finite difference solver (discrete calculus)
+            if self.enable_polynomial_solver and self.islands:
+                poly_candidates = ExactPolynomialSolver.solve(target_lhs)
+                for cand in poly_candidates:
+                    self.islands[0].inject_individual(cand, operator_applied="discrete_calculus_solve")
+
+        gen = start_gen
+        try:
+            for gen in range(start_gen, max_generations + 1):
+                discovered: Optional[Individual] = None
+
+                # 2. Step each island
+                for island in self.islands:
+                    disc = island.step(target_lhs, self.pipeline)
+                    total_evaluations += island.population_size
+                    if disc and disc.is_verified and discovered is None:
+                        discovered = disc
+
+                # 3. Check for strategic advisory intervention if enabled
+                intervention_note: Optional[str] = None
+                if self.advisory_controller is not None:
+                    advice = self.advisory_controller.check_and_apply_guidance(
+                        generation=gen,
+                        islands=self.islands,
+                        grammar=self.grammar,
+                        known_lemmas_count=len(self.kb.get_all_theorems()),
+                    )
+                    if advice is not None:
+                        advisory_interventions += 1
+                        intervention_note = f"[{advice.regime_selection}] {advice.diagnosis[:60]}..."
+
+                # 4. Gather generation telemetry
+                all_individuals = [ind for island in self.islands for ind in island.population]
+                best_ind = max(all_individuals, key=lambda ind: ind.validity)
+                pareto_count = sum(1 for ind in all_individuals if ind.rank == 1)
+                elapsed = time.perf_counter() - start_time
+
+                # Record milestone improvement if validity advanced
+                if best_ind.validity > high_water_validity + 0.005:
+                    high_water_validity = best_ind.validity
+                    rec = SearchBranchRecord(
+                        id=best_ind.id,
+                        experiment_id=experiment_id,
+                        target_str=target_str,
+                        generation=gen,
+                        candidate_str=str(best_ind.candidate),
+                        clean_formula=format_clean_formula(best_ind.candidate),
+                        validity=best_ind.validity,
+                        status="milestone",
+                        operator=best_ind.operator_applied,
+                        parent_id=last_milestone_id,
+                        parent_str=last_milestone_str,
+                        reason=f"Validity advanced to {best_ind.validity:.4f}",
+                        timestamp=time.time(),
+                    )
+                    search_branches.append(rec)
+                    last_milestone_id = best_ind.id
+                    last_milestone_str = str(best_ind.candidate)
+
+                # Sample key falsified counterexamples to log failed branches
+                falsified = [
+                    ind for ind in all_individuals 
+                    if ind.validity < 0.99 and ind.evaluation_result and not ind.evaluation_result.is_verified
+                ]
+                if falsified and (gen % 4 == 1 or gen == 1 or gen == max_generations):
+                    f_sample = max(falsified, key=lambda ind: ind.validity)
+                    fail_reason = "Falsified on test domain"
+                    if f_sample.evaluation_result and f_sample.evaluation_result.tier1_result:
+                        fail_reason = f"Fails test domain (residual {f_sample.evaluation_result.tier1_result.max_residual:.2f})"
+                    rec_fail = SearchBranchRecord(
+                        id=f_sample.id,
+                        experiment_id=experiment_id,
+                        target_str=target_str,
+                        generation=gen,
+                        candidate_str=str(f_sample.candidate),
+                        clean_formula=format_clean_formula(f_sample.candidate),
+                        validity=f_sample.validity,
+                        status="falsified",
+                        operator=f_sample.operator_applied,
+                        parent_id=last_milestone_id,
+                        parent_str=last_milestone_str,
+                        reason=fail_reason,
+                        timestamp=time.time(),
+                    )
+                    search_branches.append(rec_fail)
+
+                if intervention_note:
+                    rec_adv = SearchBranchRecord(
+                        id=f"adv_{gen}_{time.time_ns() % 10000}",
+                        experiment_id=experiment_id,
+                        target_str=target_str,
+                        generation=gen,
+                        candidate_str="",
+                        clean_formula="",
+                        validity=best_ind.validity,
+                        status="intervention",
+                        operator="advisory",
+                        parent_id=last_milestone_id,
+                        parent_str=last_milestone_str,
+                        reason=intervention_note,
+                        timestamp=time.time(),
+                    )
+                    search_branches.append(rec_adv)
+
+                telem = DiscoveryTelemetry(
                     generation=gen,
-                    candidate_str=str(discovered.candidate),
-                    clean_formula=format_clean_formula(discovered.candidate),
-                    validity=1.0,
-                    status="breakthrough",
-                    operator=discovered.operator_applied,
-                    parent_id=last_milestone_id,
-                    parent_str=last_milestone_str,
-                    reason=f"Formally proven via {proof_method}",
-                    timestamp=time.time(),
+                    best_validity=best_ind.validity,
+                    pareto_front_size=pareto_count,
+                    total_individuals_evaluated=total_evaluations,
+                    elapsed_time_sec=elapsed,
+                    best_candidate_str=str(best_ind.candidate),
+                    advisory_intervention=intervention_note,
                 )
-                search_branches.append(rec_bt)
+                telemetry_history.append(telem)
+
+                if callback:
+                    callback(telem)
+
+                # 5. Check for breakthrough discovery
+                if discovered is not None:
+                    # Generate plain-English intuitive explanation
+                    client = self.advisory_controller.client if self.advisory_controller else None
+                    if client is None:
+                        from evolutionary_math.advisory.client import MockAdvisoryClient
+                        client = MockAdvisoryClient()
+
+                    try:
+                        from evolutionary_math.utils.formatting import to_latex
+                        latex_str = to_latex(discovered.candidate)
+                    except Exception:
+                        latex_str = str(discovered.candidate)
+
+                    proof_method = (discovered.evaluation_result.proof_method or "unknown") if discovered.evaluation_result else "symbolic_induction"
+                    deps = list(self.kb._extract_dependencies(discovered.candidate))
+
+                    try:
+                        explanation = client.explain_discovery(
+                            target_str=str(target_lhs),
+                            discovery_str=str(discovered.candidate),
+                            latex_str=latex_str,
+                            proof_method=proof_method,
+                            dependencies=deps,
+                        )
+                    except Exception:
+                        explanation = f"Identity {target_lhs} = {discovered.candidate} verified via {proof_method}."
+
+                    stored = self.kb.store_discovery(
+                        discovered, target_lhs, experiment_id=experiment_id, explanation=explanation
+                    )
+                    if self.auto_promote_lemmas and stored.definition_ast is not None:
+                        lemma_name = f"L_{stored.id[:4]}"
+                        self.grammar.promote_lemma(lemma_name, stored.definition_ast)
+
+                    # Record breakthrough in history
+                    rec_bt = SearchBranchRecord(
+                        id=discovered.id,
+                        experiment_id=experiment_id,
+                        target_str=target_str,
+                        generation=gen,
+                        candidate_str=str(discovered.candidate),
+                        clean_formula=format_clean_formula(discovered.candidate),
+                        validity=1.0,
+                        status="breakthrough",
+                        operator=discovered.operator_applied,
+                        parent_id=last_milestone_id,
+                        parent_str=last_milestone_str,
+                        reason=f"Formally proven via {proof_method}",
+                        timestamp=time.time(),
+                    )
+                    search_branches.append(rec_bt)
+                    self.kb.record_branches(search_branches)
+
+                    run_res = EngineRunResult(
+                        success=True,
+                        discovered_theorem=stored,
+                        total_generations=gen,
+                        total_time_sec=elapsed,
+                        telemetry_history=telemetry_history,
+                        advisory_interventions_count=advisory_interventions,
+                    )
+                    if self.kb is not None:
+                        self.kb.delete_checkpoint(cp_key)
+                        self.kb.record_target_attempt(target_lhs, run_res, domain_mode=self.mode, experiment_id=experiment_id)
+                    return run_res
+
+                # 6. Periodic Ring Migration between islands
+                if gen % self.migration_interval == 0 and len(self.islands) > 1:
+                    self._migrate_ring()
+
+                # 7. Periodic checkpoint saving
+                if checkpoint_interval > 0 and gen % checkpoint_interval == 0:
+                    self._save_checkpoint(
+                        cp_key=cp_key,
+                        target_lhs=target_lhs,
+                        current_gen=gen,
+                        max_gens=max_generations,
+                        experiment_id=experiment_id,
+                        high_water_val=high_water_validity,
+                        total_evals=total_evaluations,
+                        advisory_count=advisory_interventions,
+                    )
+
+        except KeyboardInterrupt:
+            elapsed = time.perf_counter() - start_time
+            interrupted_gen = gen
+            self._save_checkpoint(
+                cp_key=cp_key,
+                target_lhs=target_lhs,
+                current_gen=interrupted_gen,
+                max_gens=max_generations,
+                experiment_id=experiment_id,
+                high_water_val=high_water_validity,
+                total_evals=total_evaluations,
+                advisory_count=advisory_interventions,
+            )
+            target_clean = format_clean_target(target_lhs)
+            total_inds = sum(len(isl.population) for isl in self.islands)
+            print(f"\n🛑 Search interrupted by user! Gracefully preserved working population ({total_inds} individuals, Gen {interrupted_gen}/{max_generations}) for '{target_clean}'.")
+            print(f"💾 Checkpoint saved in '{self.kb.db_path}'. Run again to seamlessly resume, or pass --fresh to start from scratch.\n")
+
+            if self.kb is not None:
                 self.kb.record_branches(search_branches)
-
-                run_res = EngineRunResult(
-                    success=True,
-                    discovered_theorem=stored,
-                    total_generations=gen,
-                    total_time_sec=elapsed,
-                    telemetry_history=telemetry_history,
-                    advisory_interventions_count=advisory_interventions,
-                )
-                if self.kb is not None:
-                    self.kb.record_target_attempt(target_lhs, run_res, domain_mode=self.mode, experiment_id=experiment_id)
-                return run_res
-
-            # 6. Periodic Ring Migration between islands
-            if gen % self.migration_interval == 0 and len(self.islands) > 1:
-                self._migrate_ring()
+            run_res = EngineRunResult(
+                success=False,
+                discovered_theorem=None,
+                total_generations=interrupted_gen,
+                total_time_sec=elapsed,
+                telemetry_history=telemetry_history,
+                advisory_interventions_count=advisory_interventions,
+                interrupted=True,
+            )
+            if self.kb is not None:
+                self.kb.record_target_attempt(target_lhs, run_res, domain_mode=self.mode, experiment_id=experiment_id)
+            return run_res
 
         # Reached max generations without formal verification
+        # Save working population to checkpoint so user can resume with higher generations
+        self._save_checkpoint(
+            cp_key=cp_key,
+            target_lhs=target_lhs,
+            current_gen=max_generations,
+            max_gens=max_generations,
+            experiment_id=experiment_id,
+            high_water_val=high_water_validity,
+            total_evals=total_evaluations,
+            advisory_count=advisory_interventions,
+        )
         self.kb.record_branches(search_branches)
         elapsed = time.perf_counter() - start_time
         run_res = EngineRunResult(
@@ -406,6 +503,38 @@ class EvolutionEngine:
         if self.kb is not None:
             self.kb.record_target_attempt(target_lhs, run_res, domain_mode=self.mode, experiment_id=experiment_id)
         return run_res
+
+    def _save_checkpoint(
+        self,
+        cp_key: str,
+        target_lhs: ExprNode,
+        current_gen: int,
+        max_gens: int,
+        experiment_id: str,
+        high_water_val: float,
+        total_evals: int,
+        advisory_count: int,
+    ) -> None:
+        """Helper to serialize island populations and persist to KB checkpoint."""
+        if self.kb is None:
+            return
+        islands_data = [isl.serialize() for isl in self.islands]
+        meta = {
+            "high_water_validity": high_water_val,
+            "total_evaluations": total_evals,
+            "advisory_interventions": advisory_count,
+        }
+        self.kb.save_checkpoint(
+            checkpoint_key=cp_key,
+            target_str=str(target_lhs),
+            clean_target=format_clean_target(target_lhs),
+            domain_mode=self.mode,
+            current_generation=current_gen,
+            max_generations=max_gens,
+            experiment_id=experiment_id,
+            islands_data=islands_data,
+            meta=meta,
+        )
 
     def _migrate_ring(self) -> None:
         """Execute unidirectional ring migration among islands: 0 -> 1 -> 2 -> ... -> 0."""

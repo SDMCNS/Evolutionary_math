@@ -334,4 +334,31 @@ Not every problem can be solved in the first few generations. In mathematics, **
 3. **Frontier Reports (`FRONTIER.md`):**
    Running `python -m evolutionary_math.cli frontier --export-md FRONTIER.md` generates an active research paper summarizing all open targets, ordered by nearest-miss validity, complete with an Ishikawa fishbone diagram of the search attempts.
 
+---
+
+## 8. Graceful Interrupts & Auto-Resume (Preserving Your Population)
+
+Evolutionary search takes time. If you press `Ctrl+C` while an equation is evolving, **you never lose your work**:
+
+1. **Graceful Exit on Interrupt:**
+   When `Ctrl+C` is pressed, the engine captures the interrupt, finishes the in-flight evaluation cleanly, serializes the active population across all islands (including all candidate formulas, ASTs, fitness vectors, and generations), and saves it to a persistent SQLite checkpoint.
+
+2. **Auto-Resume by Default:**
+   When you run the command again:
+   ```powershell
+   python -m evolutionary_math.cli discover --target "sum_k=1..n(k^5)" --db discoveries.db
+   ```
+   The engine detects the saved checkpoint and seamlessly resumes:
+   ```
+   🔄 Resuming in-progress search for '∑_{k=1}^n k⁵' from Generation 14 (160 individuals preserved across 4 islands)...
+   ```
+   The working population continues evolving right from Generation 15 without restarting!
+
+3. **Starting From Scratch (`--fresh`):**
+   If you ever want to discard saved checkpoints and start evolution completely from scratch, simply pass the `--fresh` flag:
+   ```powershell
+   python -m evolutionary_math.cli discover --target sum_k2 --fresh
+   ```
+
+
 

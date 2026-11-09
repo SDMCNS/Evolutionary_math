@@ -212,6 +212,25 @@ class KnowledgeBase:
                 ORDER BY best_validity DESC, total_evaluations DESC
             """)
 
+            # Active working checkpoints table (persists in-flight populations and state across interrupts)
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS checkpoints (
+                    checkpoint_key TEXT PRIMARY KEY,
+                    target_str TEXT NOT NULL,
+                    clean_target TEXT,
+                    domain_mode TEXT NOT NULL,
+                    current_generation INTEGER NOT NULL,
+                    max_generations INTEGER NOT NULL,
+                    experiment_id TEXT,
+                    islands_data TEXT NOT NULL,
+                    meta_json TEXT,
+                    timestamp REAL NOT NULL
+                )
+            """)
+            self.conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_checkpoint_target ON checkpoints(target_str)
+            """)
+
         # Auto-enrich legacy records with intuitive representations
         self.enrich_all_theorems()
         self.sync_target_registry_from_history()
@@ -627,6 +646,73 @@ class KnowledgeBase:
             last_attempted=r["last_attempted"],
             last_experiment_id=r["last_experiment_id"],
         )
+
+    def save_checkpoint(
+        self,
+        checkpoint_key: str,
+        target_str: str,
+        clean_target: str,
+        domain_mode: str,
+        current_generation: int,
+        max_generations: int,
+        experiment_id: str,
+        islands_data: List[Dict[str, Any]],
+        meta: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Persist in-flight population and search state to checkpoints table."""
+        now = time.time()
+        islands_json = json.dumps(islands_data)
+        meta_json = json.dumps(meta or {})
+        with self.conn:
+            self.conn.execute("""
+                INSERT OR REPLACE INTO checkpoints
+                (checkpoint_key, target_str, clean_target, domain_mode, current_generation, max_generations, experiment_id, islands_data, meta_json, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                checkpoint_key, target_str, clean_target, domain_mode,
+                current_generation, max_generations, experiment_id,
+                islands_json, meta_json, now
+            ))
+
+    def load_checkpoint(self, checkpoint_key: str) -> Optional[Dict[str, Any]]:
+        """Load in-flight checkpoint state by key."""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM checkpoints WHERE checkpoint_key = ?", (checkpoint_key,))
+        row = cursor.fetchone()
+        if not row:
+            return None
+        return {
+            "checkpoint_key": row["checkpoint_key"],
+            "target_str": row["target_str"],
+            "clean_target": row["clean_target"],
+            "domain_mode": row["domain_mode"],
+            "current_generation": row["current_generation"],
+            "max_generations": row["max_generations"],
+            "experiment_id": row["experiment_id"],
+            "islands_data": json.loads(row["islands_data"]),
+            "meta": json.loads(row["meta_json"]) if row["meta_json"] else {},
+            "timestamp": row["timestamp"],
+        }
+
+    def delete_checkpoint(self, checkpoint_key: str) -> bool:
+        """Remove a checkpoint (e.g. after successful proof)."""
+        with self.conn:
+            cursor = self.conn.cursor()
+            cursor.execute("DELETE FROM checkpoints WHERE checkpoint_key = ?", (checkpoint_key,))
+            return cursor.rowcount > 0
+
+    def has_checkpoint(self, checkpoint_key: str) -> bool:
+        """Check if a checkpoint exists for the specified key."""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT 1 FROM checkpoints WHERE checkpoint_key = ? LIMIT 1", (checkpoint_key,))
+        return cursor.fetchone() is not None
+
+    def clear_all_checkpoints(self) -> int:
+        """Clear all stored checkpoints."""
+        with self.conn:
+            cursor = self.conn.cursor()
+            cursor.execute("DELETE FROM checkpoints")
+            return cursor.rowcount
 
     def enrich_all_theorems(self, force: bool = False) -> int:
         """Backfill existing database records with human-readable names, clean notation, expanded polynomials, and explanations."""

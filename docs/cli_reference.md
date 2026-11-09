@@ -48,6 +48,7 @@ python src/evolutionary_math/cli.py discover [options]
 | `--llm-url` | string | `None` | URL to OpenAI-compatible LLM endpoint (e.g. `http://localhost:11434/v1`) |
 | `--llm-model` | string | `llama3` | Model name for LLM endpoint |
 | `--live` | flag | `False` | Enable interactive terminal dashboard |
+| `--fresh` | flag | `False` | Discard any saved checkpoint and start evolutionary search from scratch (by default, search auto-resumes where it was interrupted) |
 
 ### Examples:
 ```powershell
@@ -90,6 +91,7 @@ python src/evolutionary_math/cli.py campaign [options]
 | `--seed` | integer | `42` | PRNG random seed |
 | `--mock-llm` | flag | `True` | Enable rule-based LLM advisory guidance |
 | `--llm-url` | string | `None` | Connect to external/local LLM endpoint |
+| `--fresh` | flag | `False` | Discard any saved checkpoint and start autonomous campaign from scratch (by default, campaign auto-resumes where it was interrupted) |
 
 ### Examples:
 ```powershell
