@@ -35,7 +35,6 @@ class ProblemSpaceAgenda:
             from evolutionary_math.core.ast import parse_expr_str
             trig_targets = [
                 "sin(x)^2 + cos(x)^2",
-                "sin(m*x)^2 + cos(m*x)^2",
                 "tan(x) * cos(x)",
                 "1 - cos(x)^2",
                 "1 - sin(x)^2",
@@ -43,60 +42,88 @@ class ProblemSpaceAgenda:
                 "cos(2*x)",
                 "tan(x)",
                 "sin(x) / cos(x)",
+                "cos(2*x) + 2*sin(x)^2",
+                "cos(2*x) - cos(x)^2 + sin(x)^2",
+                "tan(x) * (1 - sin(x)^2)",
+                "cos(x)^4 - sin(x)^4",
             ]
             for s in trig_targets:
                 yield parse_expr_str(s)
             
-            # Continuous rotation across distinct trigonometric identities (not numerical increments)
-            diverse_trig = [
-                "cos(2*x) + 2*sin(x)^2",
-                "cos(2*x) - cos(x)^2 + sin(x)^2",
-                "tan(x) * (1 - sin(x)^2)",
-            ]
-            idx = 0
-            while continuous:
-                yield parse_expr_str(diverse_trig[idx % len(diverse_trig)])
-                idx += 1
+            # Continuous advanced trigonometric identities (qualitative relations, not integer increments)
+            if continuous:
+                advanced_trig = [
+                    "sin(3*x)",
+                    "cos(3*x)",
+                    "(1 - cos(2*x)) / 2",
+                    "(1 + cos(2*x)) / 2",
+                    "(1 + tan(x)^2) * cos(x)^2",
+                    "sin(a + b) + sin(a - b)",
+                    "cos(a - b) - cos(a + b)",
+                ]
+                for s in advanced_trig:
+                    yield parse_expr_str(s)
             return
 
         if self.mode == "geometry":
             from evolutionary_math.core.ast import parse_expr_str
             geom_targets = [
-                "2 * (a + b)",
-                "c * (a + b)",
-                "a * b",
-                "(a * b) / 2",
-                "sqrt(a^2 + b^2)",
-                "sqrt(a^2)",
+                "2 * (a + b)",                       # Rectangle perimeter
+                "a + b + c",                         # Triangle perimeter
+                "(a + b + c) / 2",                   # Triangle semi-perimeter
+                "a * b",                             # Rectangle area
+                "(a * h) / 2",                       # Triangle area
+                "((a + b) * h) / 2",                 # Trapezoid area
+                "(d1 * d2) / 2",                     # Rhombus area
+                "a * h",                             # Parallelogram area
+                "sqrt(a^2 + b^2)",                   # Euclidean hypotenuse
+                "a^2 + b^2",                         # Sum of squares
+                "a^2 + b^2 + c^2",                   # 3D norm squared
+                "(x2 - x1)^2 + (y2 - y1)^2",         # 2D distance squared
+                "a * b * c",                         # Cuboid volume
+                "2 * ((a * b) + ((b * c) + (c * a)))", # Cuboid surface area
+                "6 * (a^2)",                         # Cube surface area
+                "4 * (a + b + c)",                   # Cuboid edge sum
+                "(a + b)^2 - (a^2 + b^2)",           # Expansion cross term (2ab)
+                "(a + b)^2 - (a - b)^2",             # 4ab identity
+                "(a + b) * (a - b)",                 # Difference of squares
+                "(a - b) * (a^2 + ((a * b) + b^2))", # Difference of cubes
+                "(a + b) * (a^2 - ((a * b) - b^2))", # Sum of cubes
+                "(x1 + x2) / 2",                     # Midpoint coordinate
+                "(x1 * x2) + (y1 * y2)",             # 2D dot product
+                "(x1 * y2) - (x2 * y1)",             # 2D cross product magnitude
+                "(a^2 + b^2) * (c^2 + d^2) - (a*c - b*d)^2", # Brahmagupta identity
+                "(a + b + c)^2 - (a^2 + (b^2 + c^2))",        # Multinomial cross terms
+                "(((a + b) / 2)^2) - (a * b)",       # AM-GM square difference
             ]
             for s in geom_targets:
                 yield parse_expr_str(s)
             
-            # Continuous rotation across distinct geometric metrics
-            diverse_geom = [
-                "a^2 + b^2",
-                "2 * a * b",
-                "(a + b)^2 - (a^2 + b^2)",
-            ]
-            idx = 0
-            while continuous:
-                yield parse_expr_str(diverse_geom[idx % len(diverse_geom)])
-                idx += 1
+            # Continuous advanced composite invariants (distinct qualitative structures)
+            if continuous:
+                advanced_geom = [
+                    "(a + b + c) * ((a * b) + ((b * c) + (c * a))) - (a * b * c)",
+                    "(x1 - x2)^2 + ((y1 - y2)^2 + (z1 - z2)^2)",
+                    "(a - b)^2 + ((b - c)^2 + (c - a)^2)",
+                ]
+                for s in advanced_geom:
+                    yield parse_expr_str(s)
             return
 
         if self.mode == "calculus":
             from evolutionary_math.core.ast import parse_expr_str
             calc_targets = [
-                "x^2 - x",
-                "x^3 - x^2",
+                "(x + h)^2 - x^2",
+                "((x + h)^2 - x^2) / h",
+                "((x + h)^3 - x^3) / h",
+                "(x^2 - 1) / (x - 1)",
+                "(x^3 - 1) / (x - 1)",
+                "(x^4 - 1) / (x - 1)",
                 "2 * x + 1",
+                "3 * x^2 + 2 * x",
             ]
             for s in calc_targets:
                 yield parse_expr_str(s)
-            p = 4
-            while continuous:
-                yield parse_expr_str(f"x^{p} - x")
-                p += 1
             return
 
         # Level 1: Linear and Constant Sums (Algebra Mode)
@@ -176,16 +203,14 @@ class ProblemSpaceAgenda:
         yield expr_factory.op("sum", expr_factory.op("/", one, odd_prod), n)
         yield expr_factory.op("sum", expr_factory.op("/", one, prod_tetra), n)
 
-        # 11. Open-ended diverse rotation for continuous discovery across distinct degrees
+        # 11. Continuous discovery across higher order distinct degrees
         if not continuous:
             return
 
-        p = 6
-        while True:
-            # Rotate through higher degree power sums k^p
+        for p in range(6, 9):
             p_const = expr_factory.constant(p)
             yield expr_factory.op("sum", expr_factory.op("^", k, p_const), n)
-            p += 1
+        return
 
     def get_curriculum_targets(self) -> List[ExprNode]:
         """Return the finite sequence of core curriculum targets for the active mode."""

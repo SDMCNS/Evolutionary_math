@@ -187,3 +187,48 @@ def test_consolidate_parametric_families(tmp_path):
     assert "k * (k + m)" in master_th.target_str or "k*(k + m)" in master_th.target_str
 
     kb.close()
+
+
+def test_scalar_multiple_lifting_and_subsumption(tmp_path):
+    """Verify lifting numeric scalar multiples (e.g. 4a, 5a) into c*a and subsuming subsequent instances."""
+    db_path = str(tmp_path / "test_scalar_lifting.db")
+    kb = KnowledgeBase(db_path)
+
+    # 1. Verify extract_parametric_family lifts 4 * a -> c * a
+    t_4a = parse_expr_str("4 * a")
+    family = extract_parametric_family(t_4a)
+    assert family is not None
+    gen_tgt, param_name, c_val = family
+    assert param_name == "c"
+    assert c_val == 4
+    assert "c" in gen_tgt.variables
+    assert "a" in gen_tgt.variables
+
+    # 2. Insert 4 * a and 5 * a
+    for mult in [4, 5]:
+        t = parse_expr_str(f"{mult} * a")
+        ind = Individual(candidate=t, generation=0)
+        from evolutionary_math.evaluation.tier2_symbolic import Tier2Result
+        ind.evaluation_result = Tier2Result(is_verified=True, proof_method="algebraic_zero_equivalence", simplified_difference="0", runtime_ms=1.0)
+        kb.store_discovery(ind, t, experiment_id="scalars")
+
+    assert len(kb.get_all_theorems()) == 2
+
+    # 3. Consolidate into c * a
+    count = kb.consolidate_parametric_families()
+    assert count == 2
+    theorems = kb.get_all_theorems()
+    assert len(theorems) == 1
+    assert theorems[0].is_generalized is True
+    assert "c" in theorems[0].parameter_vars
+
+    # 4. Verify any subsequent scalar multiple (like 44 * a) is immediately considered SOLVED and subsumed
+    t_44a = parse_expr_str("44 * a")
+    assert kb.is_target_solved(t_44a) is True
+
+    sub = kb.find_subsuming_theorem(t_44a)
+    assert sub is not None
+    th_master, sub_dict = sub
+    assert sub_dict["c"] == 44
+
+    kb.close()

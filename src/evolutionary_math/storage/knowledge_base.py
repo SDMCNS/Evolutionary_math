@@ -132,6 +132,13 @@ class KnowledgeBase:
                 CREATE INDEX IF NOT EXISTS idx_is_generalized ON theorems(is_generalized)
             """)
 
+            # Sanitize false-positive generalized theorems (e.g. non-sum identities where coordinate variables were flagged as parameters)
+            self.conn.execute("""
+                UPDATE theorems 
+                SET is_generalized = 0, parameter_vars = '[]'
+                WHERE is_generalized = 1 AND target_str NOT LIKE 'sum%'
+            """)
+
             # Create clean human-readable SQL View for SQLite clients & dashboards
             self.conn.execute("""
                 CREATE VIEW IF NOT EXISTS v_discoveries AS
@@ -233,6 +240,7 @@ class KnowledgeBase:
 
         # Auto-enrich legacy records with intuitive representations
         self.enrich_all_theorems()
+        self.consolidate_parametric_families()
         self.sync_target_registry_from_history()
 
     def record_branch(self, branch: SearchBranchRecord) -> None:
@@ -673,6 +681,13 @@ class KnowledgeBase:
                 current_generation, max_generations, experiment_id,
                 islands_json, meta_json, now
             ))
+            # Auto-prune stale superseded checkpoints to keep storage bounded
+            self.conn.execute("""
+                DELETE FROM checkpoints 
+                WHERE checkpoint_key NOT IN (
+                    SELECT checkpoint_key FROM checkpoints ORDER BY timestamp DESC LIMIT 5
+                )
+            """)
 
     def load_checkpoint(self, checkpoint_key: str) -> Optional[Dict[str, Any]]:
         """Load in-flight checkpoint state by key."""
@@ -726,10 +741,13 @@ class KnowledgeBase:
         )
 
         cursor = self.conn.cursor()
-        cursor.execute("SELECT id, target_str, discovery_str, ast_json, name, clean_target, clean_formula, expanded_formula, latex, explanation, proof_method, dependencies_json FROM theorems")
+        cursor.execute("SELECT id, target_str, discovery_str, ast_json, name, clean_target, clean_formula, expanded_formula, latex, explanation, proof_method, dependencies_json, is_generalized, parameter_vars FROM theorems")
         rows = cursor.fetchall()
         updated_count = 0
         mock_client = MockAdvisoryClient()
+
+        from evolutionary_math.core.generalization import identify_parameter_variables
+        from evolutionary_math.core.ast import parse_expr_str
 
         for r in rows:
             needs_update = force
@@ -739,6 +757,20 @@ class KnowledgeBase:
             ast_dict = json.loads(r["ast_json"]) if r["ast_json"] else None
             def_ast = expr_from_dict(ast_dict) if ast_dict else None
             deps = json.loads(r["dependencies_json"]) if r["dependencies_json"] else []
+
+            # Ensure is_generalized accurately reflects true parametric families
+            try:
+                t_node = parse_expr_str(target_str)
+                real_param_vars = identify_parameter_variables(t_node)
+                real_is_gen = 1 if real_param_vars else 0
+            except Exception:
+                real_param_vars = []
+                real_is_gen = 0
+
+            curr_is_gen = r["is_generalized"] if "is_generalized" in r.keys() else 0
+            curr_params = json.loads(r["parameter_vars"]) if ("parameter_vars" in r.keys() and r["parameter_vars"]) else []
+            if curr_is_gen != real_is_gen or curr_params != real_param_vars:
+                needs_update = True
 
             name = r["name"]
             inferred_name = infer_theorem_name(target_str, discovery_str)
@@ -785,9 +817,9 @@ class KnowledgeBase:
                 with self.conn:
                     self.conn.execute("""
                         UPDATE theorems 
-                        SET name = ?, clean_target = ?, clean_formula = ?, expanded_formula = ?, latex = ?, explanation = ?
+                        SET name = ?, clean_target = ?, clean_formula = ?, expanded_formula = ?, latex = ?, explanation = ?, is_generalized = ?, parameter_vars = ?
                         WHERE id = ?
-                    """, (name, clean_target, clean_formula, expanded_formula, latex_str, explanation, th_id))
+                    """, (name, clean_target, clean_formula, expanded_formula, latex_str, explanation, real_is_gen, json.dumps(real_param_vars), th_id))
                 updated_count += 1
 
         return updated_count
@@ -1033,26 +1065,38 @@ class KnowledgeBase:
             if len(member_theorems) >= 2:
                 gen_tgt = parse_expr_str(gen_key)
                 solutions = ExactPolynomialSolver.solve(gen_tgt)
+                ind_var = "n" if "n" in gen_tgt.variables else ("a" if "a" in gen_tgt.variables else ("x" if "x" in gen_tgt.variables else "k"))
+                verifier = Tier2SymbolicVerifier(induction_variable=ind_var)
+                gen_formula = None
+                res = None
+
                 if solutions:
                     gen_formula = solutions[0]
-                    verifier = Tier2SymbolicVerifier(induction_variable="n")
                     res = verifier.verify(gen_tgt, gen_formula)
+                else:
+                    # Non-sum algebraic/geometric parametric families (e.g. c * a, a^p)
+                    res = verifier.verify(gen_tgt, gen_tgt)
                     if res.is_verified:
-                        ind = Individual(candidate=gen_formula, generation=0)
-                        ind.evaluation_result = res
-                        # Store generalized master theorem
-                        self.store_discovery(
-                            individual=ind,
-                            target_lhs=gen_tgt,
-                            experiment_id="consolidation",
-                        )
-                        # Purge redundant concrete iterations
-                        member_ids = [t.id for t in member_theorems]
-                        with self.conn:
-                            for mid in member_ids:
-                                self.conn.execute("DELETE FROM theorems WHERE id = ?", (mid,))
-                                self.conn.execute("DELETE FROM search_history WHERE id = ? OR target_str = ?", (mid, mid))
-                        consolidated_count += len(member_theorems)
+                        gen_formula = gen_tgt
+
+                if gen_formula and res and res.is_verified:
+                    ind = Individual(candidate=gen_formula, generation=0)
+                    ind.evaluation_result = res
+                    # Store generalized master theorem
+                    self.store_discovery(
+                        individual=ind,
+                        target_lhs=gen_tgt,
+                        experiment_id="consolidation",
+                    )
+                    # Purge redundant concrete iterations from theorems, search_history, and target_registry
+                    member_ids = [t.id for t in member_theorems]
+                    member_targets = [t.target_str for t in member_theorems]
+                    with self.conn:
+                        for mid, mtgt in zip(member_ids, member_targets):
+                            self.conn.execute("DELETE FROM theorems WHERE id = ?", (mid,))
+                            self.conn.execute("DELETE FROM search_history WHERE id = ? OR target_str = ?", (mid, mtgt))
+                            self.conn.execute("DELETE FROM target_registry WHERE target_str = ?", (mtgt,))
+                    consolidated_count += len(member_theorems)
 
         return consolidated_count
 

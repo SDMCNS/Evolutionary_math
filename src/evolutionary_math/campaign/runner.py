@@ -75,6 +75,9 @@ class AutonomousDiscoveryCampaign:
         target_stream = self.agenda.generate_targets()
 
         target_idx = 0
+        consecutive_skips = 0
+        max_consecutive_skips = 50
+
         try:
             for target in target_stream:
                 target_idx += 1
@@ -83,7 +86,14 @@ class AutonomousDiscoveryCampaign:
 
                 # Skip targets that have already been proven and recorded
                 if self.kb.is_target_solved(target):
+                    consecutive_skips += 1
+                    if consecutive_skips >= max_consecutive_skips:
+                        print(f"\n✨ All available exploration targets for mode '{self.mode}' have been explored and verified!")
+                        print(f"📊 Total verified theorems in knowledge base: {len(self.kb.get_all_theorems())}\n")
+                        break
                     continue
+
+                consecutive_skips = 0
 
                 # 1. Update grammar with all currently known lemmas
                 self.kb.promote_lemmas_to_grammar(self.grammar)
