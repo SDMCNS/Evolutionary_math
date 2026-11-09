@@ -177,6 +177,9 @@ class ProblemSpaceAgenda:
         yield expr_factory.op("sum", expr_factory.op("/", one, prod_tetra), n)
 
         # 11. Open-ended diverse rotation for continuous discovery across distinct degrees
+        if not continuous:
+            return
+
         p = 6
         while True:
             # Rotate through higher degree power sums k^p
